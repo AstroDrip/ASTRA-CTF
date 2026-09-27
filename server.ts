@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import cookieParser from 'cookie-parser';
@@ -6,7 +7,10 @@ import { store } from './server/store.js';
 import { SIMULATED_EMAILS, SIMULATED_FILES, SIMULATED_PACKETS } from './server/simulated-data.js';
 
 const PORT = 3000;
-const ADMIN_SECRET = 'astra-admin-2026';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+  throw new Error('ADMIN_SECRET is required. Set it in the server environment before starting ASTRA.');
+}
 
 // Extend Express Request
 interface AuthenticatedRequest extends Request {
