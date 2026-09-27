@@ -1,7 +1,5 @@
 {
   "name": "ASTRA // ECHO — Living Cyber Range",
   "description": "A fictional, self-contained cybersecurity CTF competition platform and incident investigation range featuring ECHO intelligence, interactive network map, simulated systems, and evidence tracking.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }
-
