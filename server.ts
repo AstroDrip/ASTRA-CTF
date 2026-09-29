@@ -3,7 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
-import { store } from './server/store.js';
+import { store } from './server/supabase-store.js';
 import { SIMULATED_EMAILS, SIMULATED_FILES, SIMULATED_PACKETS } from './server/simulated-data.js';
 
 const PORT = 3000;
@@ -32,16 +32,18 @@ async function startServer() {
   });
 
   // Auth extraction middleware
-  app.use((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  app.use(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
     const customHeaderToken = (req.headers['x-auth-token'] as string) || null;
     const token = bearerToken || customHeaderToken || req.cookies?.astrasess;
-    if (token) {
-      const team = store.getTeamByToken(token);
-      if (team) {
-        req.team = team;
+    try {
+      if (token) {
+        const team = await store.getTeamByToken(token);
+        if (team) req.team = team;
       }
+    } catch {
+      // Treat datastore/auth lookup failures as unauthenticated for this request.
     }
     next();
   });
@@ -86,12 +88,12 @@ async function startServer() {
     }
   });
 
-  app.post('/api/auth/logout', (req: AuthenticatedRequest, res) => {
+  app.post('/api/auth/logout', async (req: AuthenticatedRequest, res) => {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
     const token = bearerToken || req.cookies?.astrasess;
     if (token) {
-      store.destroySession(token);
+      await store.destroySession(token);
     }
     res.clearCookie('astrasess', { sameSite: 'none', secure: true });
     res.json({ success: true });
@@ -102,12 +104,12 @@ async function startServer() {
   });
 
   // Challenges
-  app.get('/api/challenges', (req: AuthenticatedRequest, res) => {
-    const challenges = store.getSanitizedChallenges(req.team);
+  app.get('/api/challenges', async (req: AuthenticatedRequest, res) => {
+    const challenges = await store.getSanitizedChallenges(req.team);
     res.json({ challenges });
   });
 
-  app.post('/api/challenges/:id/submit', (req: AuthenticatedRequest, res) => {
+  app.post('/api/challenges/:id/submit', async (req: AuthenticatedRequest, res) => {
     if (!req.team) {
       return res.status(401).json({ error: 'Authentication required to submit flags.' });
     }
@@ -118,21 +120,21 @@ async function startServer() {
         return res.status(400).json({ error: 'Flag parameter is required.' });
       }
 
-      const result = store.submitFlag(req.team.id, id, flag);
+      const result = await store.submitFlag(req.team.id, id, flag);
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Submission failed' });
     }
   });
 
-  app.post('/api/challenges/:id/hint', (req: AuthenticatedRequest, res) => {
+  app.post('/api/challenges/:id/hint', async (req: AuthenticatedRequest, res) => {
     if (!req.team) {
       return res.status(401).json({ error: 'Authentication required to unlock hints.' });
     }
     try {
       const { id } = req.params;
       const { hintId } = req.body;
-      const result = store.unlockHint(req.team.id, id, Number(hintId));
+      const result = await store.unlockHint(req.team.id, id, Number(hintId));
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Hint unlock failed' });
@@ -140,30 +142,30 @@ async function startServer() {
   });
 
   // Evidence & Investigation
-  app.get('/api/evidence', (req: AuthenticatedRequest, res) => {
-    const evidence = store.getRecoveredEvidence(req.team);
+  app.get('/api/evidence', async (req: AuthenticatedRequest, res) => {
+    const evidence = await store.getRecoveredEvidence(req.team);
     res.json({ evidence });
   });
 
-  app.get('/api/timeline', (req: AuthenticatedRequest, res) => {
-    const timeline = store.getIncidentTimeline(req.team);
+  app.get('/api/timeline', async (req: AuthenticatedRequest, res) => {
+    const timeline = await store.getIncidentTimeline(req.team);
     res.json({ timeline });
   });
 
-  app.get('/api/achievements', (req: AuthenticatedRequest, res) => {
-    const achievements = store.getAchievements(req.team);
+  app.get('/api/achievements', async (req: AuthenticatedRequest, res) => {
+    const achievements = await store.getAchievements(req.team);
     res.json({ achievements });
   });
 
   // Leaderboard
-  app.get('/api/scoreboard', (req, res) => {
-    const leaderboard = store.getLeaderboard();
+  app.get('/api/scoreboard', async (req, res) => {
+    const leaderboard = await store.getLeaderboard();
     res.json({ leaderboard });
   });
 
   // Submissions stream
-  app.get('/api/submissions', (req, res) => {
-    const submissions = store.getSubmissions(30);
+  app.get('/api/submissions', async (req, res) => {
+    const submissions = await store.getSubmissions(30);
     // Sanitize attempted flags so competitors can't harvest solutions from public logs
     const sanitized = submissions.map((s) => ({
       id: s.id,
@@ -177,15 +179,18 @@ async function startServer() {
   });
 
   // Simulated Systems APIs
-  app.get('/api/simulated/mailbox', (req, res) => {
+  app.get('/api/simulated/mailbox', (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
     res.json({ emails: SIMULATED_EMAILS });
   });
 
-  app.get('/api/simulated/files', (req, res) => {
+  app.get('/api/simulated/files', (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
     res.json({ root: SIMULATED_FILES });
   });
 
-  app.get('/api/simulated/packets', (req, res) => {
+  app.get('/api/simulated/packets', (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
     const filter = (req.query.filter as string)?.toUpperCase();
     if (filter && filter !== 'ALL') {
       return res.json({
@@ -197,6 +202,7 @@ async function startServer() {
 
   // Simulated Terminal command runner (Safe, in-memory virtual shell)
   app.post('/api/simulated/terminal/exec', (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
     const { command } = req.body;
     if (!command || typeof command !== 'string') {
       return res.json({ output: '' });
@@ -205,7 +211,23 @@ async function startServer() {
     const trimmed = command.trim();
     if (!trimmed) return res.json({ output: '' });
 
-    const parts = trimmed.split(/\s+/);
+    let commandText = trimmed;
+    const pipeline = trimmed.split('|').map((part) => part.trim()).filter(Boolean);
+    if (pipeline.length > 1) {
+      const first = pipeline[0];
+      const second = pipeline[1];
+      if (/^echo\s+/i.test(first) && /^xxd\s+-r\s+-p$/i.test(second)) {
+        const value = first.replace(/^echo\s+/i, '').trim().replace(/^(['"])(.*)\1$/, '$2');
+        commandText = `xxd -r -p ${value}`;
+      } else if (/^strings\s+\S+$/i.test(first) && /^grep\s+/i.test(second)) {
+        const file = first.split(/\s+/)[1];
+        const query = second.replace(/^grep\s+/i, '').trim();
+        commandText = `grep ${query} ${file}`;
+      } else {
+        return res.json({ output: 'astra-sh: unsupported pipeline. Only the documented ASTRA pipelines are available.' });
+      }
+    }
+    const parts = commandText.split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const args = parts.slice(1);
 
@@ -221,6 +243,7 @@ Available commands:
   grep <pattern> <file>   Search for pattern in virtual file
   strings <file>          Extract printable character strings from binary
   xxd -r -p <hex>         Convert hexadecimal stream to text
+  echo <text>             Print text to stdout
   file <path>             Determine file type signature
   pwd                     Print current working directory
   whoami                  Show active operator identity
@@ -228,6 +251,11 @@ Available commands:
   echo-quarantine --status Check ECHO core quarantine barrier status
   echo-quarantine --engage Disarm rogue intelligence with master key`,
         });
+
+      case 'echo': {
+        const value = args.join(' ');
+        return res.json({ output: value.replace(/^(['"])(.*)\1$/, '$2') });
+      }
 
       case 'pwd':
         return res.json({ output: '/home/investigator' });
@@ -443,13 +471,13 @@ KEY: ASTRA{echo_intelligence_quarantined_2026}`,
     }
   });
 
-  app.get('/api/admin/overview', (req, res) => {
+  app.get('/api/admin/overview', async (req, res) => {
     const passcode = req.headers['x-admin-passcode'];
     if (passcode !== ADMIN_SECRET) {
       return res.status(401).json({ error: 'Unauthorized admin access.' });
     }
-    const teams = store.getAllTeams();
-    const submissions = store.getSubmissions(200);
+    const teams = await store.getAllTeams();
+    const submissions = await store.getSubmissions(200);
     res.json({
       teamsCount: teams.length,
       submissionsCount: submissions.length,
@@ -458,26 +486,27 @@ KEY: ASTRA{echo_intelligence_quarantined_2026}`,
     });
   });
 
-  app.post('/api/admin/reset', (req, res) => {
+  app.post('/api/admin/reset', async (req, res) => {
     const passcode = req.headers['x-admin-passcode'];
     if (passcode !== ADMIN_SECRET) {
       return res.status(401).json({ error: 'Unauthorized admin access.' });
     }
-    store.adminResetCompetition();
+    await store.adminResetCompetition();
     res.json({ success: true, message: 'All competition records, submissions, and sessions reset successfully.' });
   });
 
-  app.post('/api/admin/challenge-toggle', (req, res) => {
+  app.post('/api/admin/challenge-toggle', async (req, res) => {
     const passcode = req.headers['x-admin-passcode'];
     if (passcode !== ADMIN_SECRET) {
       return res.status(401).json({ error: 'Unauthorized admin access.' });
     }
     const { challengeId, disable } = req.body;
-    store.adminToggleChallenge(challengeId, Boolean(disable));
+    await store.adminToggleChallenge(challengeId, Boolean(disable));
     res.json({ success: true });
   });
 
   // --- Vite & Static Handling ---
+  if (process.env.VERCEL) return app;
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -492,9 +521,20 @@ KEY: ASTRA{echo_intelligence_quarantined_2026}`,
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ASTRA // ECHO Living Cyber Range running on http://0.0.0.0:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+let appPromise: ReturnType<typeof startServer> | null = null;
+
+export async function getApp() {
+  if (!appPromise) appPromise = startServer();
+  return appPromise;
+}
+
+if (!process.env.VERCEL) {
+  getApp().then((app) => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`ASTRA // ECHO Living Cyber Range running on http://0.0.0.0:${PORT}`);
+    });
+  });
+}

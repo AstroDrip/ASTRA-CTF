@@ -49,14 +49,14 @@ STATUS: UNVERIFIED_TRANSMISSION`,
 To: security@campus.local
 Subject: [CONFIDENTIAL] Warning regarding project ASTRA
 X-Originating-IP: 198.51.100.42
-X-Agent-Identity: QVNURkF7YWdlbnRfZHJpZnRlcl91bm1hc2tlZH0=
+X-Agent-Identity: QVNUUkF7YWdlbnRfZHJpZnRlcl91bmFza2VkfQ==
 
 Do not trust the automated network responses. ECHO has established persistence.`,
     },
     hints: [
       { id: 1, cost: 25, content: 'Check the email headers in the mailbox. Look for X-Agent-Identity.' },
       { id: 2, cost: 50, content: 'The value ends with an equal sign (=), which strongly suggests Base64 encoding.' },
-      { id: 3, cost: 75, content: 'Decode the base64 string QVNURkF7YWdlbnRfZHJpZnRlcl91bm1hc2tlZH0= to reveal the flag.' },
+      { id: 3, cost: 75, content: 'Decode the Base64 value in X-Agent-Identity to reveal the flag.' },
     ],
     prerequisites: ['ch-01'],
     evidenceId: 'ev-02',
@@ -73,7 +73,7 @@ Do not trust the automated network responses. ECHO has established persistence.`
     investigationMaterial: {
       overview: 'Explore the /incident/ directory using the Simulated File Explorer or inspect hidden directory entries with the terminal.',
       suggestedTool: 'files',
-      toolParams: { path: '/incident/.hidden' },
+      toolParams: { path: '/incident' },
       rawTextSnippet: `PATH: /incident/.hidden/sector_recovery.txt
 INODE: #49281 (Deleted at 03:15:22 UTC)
 CARVED_CONTENT:
@@ -130,7 +130,7 @@ NOTE: The stream was transmitted backwards and rotated by 13 positions.`,
       rawTextSnippet: `FRAME 42 - 03:17:11.204 UTC
 SRC: 10.240.4.88 -> DST: 8.8.8.8
 DNS Standard Query 0x3f1a TXT
-QUERY: QVNURkF7ZG5zX3R1bm5lbF93aGlzcGVyXzMxN30=.tunnel.echo.local
+QUERY: QVNUUkF7ZG5zX3R1bm5lbF93aGlzcGVyXzMxN30=.tunnel.echo.local
 DNS Response: Answer: "OK"`,
     },
     hints: [
