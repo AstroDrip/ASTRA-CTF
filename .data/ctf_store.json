@@ -1,0 +1,206 @@
+{
+  "teams": [
+    [
+      "team-kmct-alpha",
+      {
+        "id": "team-kmct-alpha",
+        "name": "KMCT_ALPHA",
+        "score": 1150,
+        "solvedChallengeIds": [
+          "ch-01",
+          "ch-02",
+          "ch-03",
+          "ch-04",
+          "ch-05",
+          "ch-06"
+        ],
+        "evidenceIds": [
+          "ev-01",
+          "ev-02",
+          "ev-03",
+          "ev-04",
+          "ev-05",
+          "ev-06"
+        ],
+        "unlockedHintKeys": [
+          "ch-04_hint_1"
+        ],
+        "wrongAttemptsCount": 2,
+        "echoState": "ADAPTING",
+        "threatLevel": 2,
+        "achievements": [
+          "ach-01",
+          "ach-02"
+        ],
+        "lastSolveAt": "2026-09-30T14:20:14.416Z",
+        "createdAt": "2026-09-30T12:38:14.417Z"
+      }
+    ],
+    [
+      "team-void-seekers",
+      {
+        "id": "team-void-seekers",
+        "name": "VOID_SEEKERS",
+        "score": 870,
+        "solvedChallengeIds": [
+          "ch-01",
+          "ch-02",
+          "ch-03",
+          "ch-04",
+          "ch-05"
+        ],
+        "evidenceIds": [
+          "ev-01",
+          "ev-02",
+          "ev-03",
+          "ev-04",
+          "ev-05"
+        ],
+        "unlockedHintKeys": [
+          "ch-03_hint_1"
+        ],
+        "wrongAttemptsCount": 1,
+        "echoState": "ADAPTING",
+        "threatLevel": 2,
+        "achievements": [
+          "ach-01",
+          "ach-02"
+        ],
+        "lastSolveAt": "2026-09-30T14:03:14.417Z",
+        "createdAt": "2026-09-30T12:38:14.417Z"
+      }
+    ],
+    [
+      "team-zero-day",
+      {
+        "id": "team-zero-day",
+        "name": "ZERO_DAY_SYNDICATE",
+        "score": 530,
+        "solvedChallengeIds": [
+          "ch-01",
+          "ch-02",
+          "ch-03"
+        ],
+        "evidenceIds": [
+          "ev-01",
+          "ev-02",
+          "ev-03"
+        ],
+        "unlockedHintKeys": [],
+        "wrongAttemptsCount": 0,
+        "echoState": "OBSERVING",
+        "threatLevel": 1,
+        "achievements": [
+          "ach-01",
+          "ach-02",
+          "ach-03"
+        ],
+        "lastSolveAt": "2026-09-30T13:50:14.417Z",
+        "createdAt": "2026-09-30T12:38:14.417Z"
+      }
+    ],
+    [
+      "team-phantom",
+      {
+        "id": "team-phantom",
+        "name": "NEURAL_PHANTOM",
+        "score": 370,
+        "solvedChallengeIds": [
+          "ch-01",
+          "ch-02"
+        ],
+        "evidenceIds": [
+          "ev-01",
+          "ev-02"
+        ],
+        "unlockedHintKeys": [],
+        "wrongAttemptsCount": 1,
+        "echoState": "OBSERVING",
+        "threatLevel": 1,
+        "achievements": [
+          "ach-01"
+        ],
+        "lastSolveAt": "2026-09-30T13:38:14.417Z",
+        "createdAt": "2026-09-30T12:38:14.417Z"
+      }
+    ],
+    [
+      "team-e1938e78",
+      {
+        "id": "team-e1938e78",
+        "name": "test_unit_0583",
+        "score": 0,
+        "solvedChallengeIds": [],
+        "unlockedHintKeys": [],
+        "wrongAttemptsCount": 0,
+        "echoState": "OBSERVING",
+        "threatLevel": 1,
+        "achievements": [],
+        "evidenceIds": [],
+        "createdAt": "2026-09-30T15:35:30.686Z"
+      }
+    ],
+    [
+      "team-a47806cb",
+      {
+        "id": "team-a47806cb",
+        "name": "unit_test_9188",
+        "score": 0,
+        "solvedChallengeIds": [],
+        "unlockedHintKeys": [],
+        "wrongAttemptsCount": 0,
+        "echoState": "OBSERVING",
+        "threatLevel": 1,
+        "achievements": [],
+        "evidenceIds": [],
+        "createdAt": "2026-09-30T15:38:39.293Z"
+      }
+    ]
+  ],
+  "passwordHashes": [
+    [
+      "team-kmct-alpha",
+      "$2b$10$R2NaIbxRW2.DMt89Dt/puuWP5CQG5eupj86D9fGrTzJ0qj0KQvAo6"
+    ],
+    [
+      "team-void-seekers",
+      "$2b$10$R2NaIbxRW2.DMt89Dt/puuWP5CQG5eupj86D9fGrTzJ0qj0KQvAo6"
+    ],
+    [
+      "team-zero-day",
+      "$2b$10$R2NaIbxRW2.DMt89Dt/puuWP5CQG5eupj86D9fGrTzJ0qj0KQvAo6"
+    ],
+    [
+      "team-phantom",
+      "$2b$10$R2NaIbxRW2.DMt89Dt/puuWP5CQG5eupj86D9fGrTzJ0qj0KQvAo6"
+    ],
+    [
+      "team-e1938e78",
+      "$2b$10$fx7GfCrFBHPMh2LiphFMFuAD.PGmJ3iPwzvpoPO8NOAcjX.ZG9J1C"
+    ],
+    [
+      "team-a47806cb",
+      "$2b$10$SQGajAU2H49tOskTKwHhOO76GPiLGkQ/Mly23hQlDVk2GsfYMvoJ2"
+    ]
+  ],
+  "sessions": [
+    [
+      "astrasess_22b7d326eef54be165e6e4d5577b22d0cafe2b4567bc9aef3de26fc034e612fc",
+      {
+        "token": "astrasess_22b7d326eef54be165e6e4d5577b22d0cafe2b4567bc9aef3de26fc034e612fc",
+        "teamId": "team-e1938e78",
+        "createdAt": 1790782530687
+      }
+    ],
+    [
+      "astrasess_4457c2f2ea737748f350e941cdca17d595bec05207c4cf7f10953dd5392b4029",
+      {
+        "token": "astrasess_4457c2f2ea737748f350e941cdca17d595bec05207c4cf7f10953dd5392b4029",
+        "teamId": "team-a47806cb",
+        "createdAt": 1790782719296
+      }
+    ]
+  ],
+  "submissions": [],
+  "disabledChallengeIds": []
+}

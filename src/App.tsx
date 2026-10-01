@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { ParticleBackground } from './components/ParticleBackground';
+import { SystemNoticeBanner } from './components/SystemNoticeBanner';
 import { Header } from './components/Header';
 import { LandingView } from './components/LandingView';
 import { WarRoomView } from './components/WarRoomView';
@@ -50,6 +51,9 @@ export default function App() {
       <div className="relative min-h-screen bg-[#07090b] text-[#f3f4f6] selection:bg-[#ccff00] selection:text-black flex flex-col font-sans overflow-x-hidden">
         {/* Procedural Particle & Cyber Perspective Grid */}
         <ParticleBackground />
+
+        {/* Dynamic System Notice & Configuration Banner */}
+        <SystemNoticeBanner />
 
         {/* Global Operational HUD Header */}
         <Header />

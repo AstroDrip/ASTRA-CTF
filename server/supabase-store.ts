@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import {
@@ -16,6 +17,7 @@ import {
   INITIAL_ACHIEVEMENTS,
   ServerChallengeDefinition,
 } from './challenges-data.js';
+import { CTFStore } from './store.js';
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -23,30 +25,64 @@ interface SupabaseRow {
   [key: string]: any;
 }
 
-function env(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for Supabase-backed ASTRA.`);
-  return value.replace(/\/+$/, '');
+function safeError(error: any): Error {
+  const message = error?.message || error?.details || error?.hint || 'Supabase request failed';
+  return new Error(message);
 }
 
 function tokenHash(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function safeError(error: any): Error {
-  const message = error?.message || error?.details || error?.hint || 'Supabase request failed';
-  return new Error(message);
-}
-
 export class SupabaseCTFStore {
-  private readonly url = env('SUPABASE_URL');
-  private readonly key = env('SUPABASE_SERVICE_ROLE_KEY');
+  private readonly url: string | null;
+  private readonly key: string | null;
+  private readonly localStore: CTFStore;
+  private readonly isConfigured: boolean;
+
+  constructor() {
+    const rawUrl = process.env.SUPABASE_URL;
+    const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (rawUrl && rawKey && rawUrl.trim() !== '' && rawKey.trim() !== '') {
+      this.url = rawUrl.trim().replace(/\/+$/, '');
+      this.key = rawKey.trim();
+      this.isConfigured = true;
+      console.log('[ASTRA STORE] Supabase database backend connected.');
+    } else {
+      this.url = null;
+      this.key = null;
+      this.isConfigured = false;
+      console.warn('[ASTRA STORE] ⚠️ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured. Running with local fallback store (.data/ctf_store.json).');
+    }
+
+    this.localStore = new CTFStore();
+  }
+
+  public isSupabaseConfigured(): boolean {
+    return this.isConfigured;
+  }
+
+  public getStorageMode(): 'supabase' | 'local-fallback' {
+    return this.isConfigured ? 'supabase' : 'local-fallback';
+  }
+
+  public getSystemWarnings(): string[] {
+    const warnings: string[] = [];
+    if (!this.isConfigured) {
+      warnings.push('Database (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) is not configured. Running in local standalone storage mode.');
+    }
+    return warnings;
+  }
 
   private async request(
     table: string,
     init: RequestInit = {},
     query = '',
   ): Promise<any> {
+    if (!this.isConfigured || !this.url || !this.key) {
+      throw new Error('Supabase is not configured.');
+    }
     const response = await fetch(`${this.url}/rest/v1/${table}${query}`, {
       ...init,
       headers: {
@@ -62,10 +98,19 @@ export class SupabaseCTFStore {
       throw new Error(body || `Supabase request failed (${response.status})`);
     }
     if (response.status === 204) return null;
-    return response.json();
+    const text = await response.text();
+    if (!text || !text.trim()) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 
   private async rpc(name: string, args: Record<string, unknown>): Promise<any> {
+    if (!this.isConfigured || !this.url || !this.key) {
+      throw new Error('Supabase is not configured.');
+    }
     const response = await fetch(`${this.url}/rest/v1/rpc/${name}`, {
       method: 'POST',
       headers: {
@@ -80,7 +125,14 @@ export class SupabaseCTFStore {
       try { body = await response.text(); } catch {}
       throw new Error(body || `Supabase RPC ${name} failed (${response.status})`);
     }
-    return response.json();
+    if (response.status === 204) return null;
+    const text = await response.text();
+    if (!text || !text.trim()) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 
   private rowToTeam(row: SupabaseRow): Team {
@@ -101,6 +153,9 @@ export class SupabaseCTFStore {
   }
 
   private async getTeam(teamId: string): Promise<Team | null> {
+    if (!this.isConfigured) {
+      return this.localStore.getAllTeams().find((t) => t.id === teamId) || null;
+    }
     const rows = await this.request(
       'teams',
       {},
@@ -110,6 +165,10 @@ export class SupabaseCTFStore {
   }
 
   public async registerTeam(name: string, passwordPlain: string): Promise<{ team: Team; token: string }> {
+    if (!this.isConfigured) {
+      return this.localStore.registerTeam(name, passwordPlain);
+    }
+
     const trimmed = String(name || '').trim();
     if (!trimmed || trimmed.length < 3) throw new Error('Team name must be at least 3 characters.');
     if (trimmed.length > 28) throw new Error('Team name cannot exceed 28 characters.');
@@ -154,6 +213,10 @@ export class SupabaseCTFStore {
   }
 
   public async loginTeam(name: string, passwordPlain: string): Promise<{ team: Team; token: string }> {
+    if (!this.isConfigured) {
+      return this.localStore.loginTeam(name, passwordPlain);
+    }
+
     const normalized = String(name || '').trim().toLowerCase();
     const rows = await this.request(
       'teams',
@@ -173,6 +236,10 @@ export class SupabaseCTFStore {
   }
 
   public async createSession(teamId: string): Promise<string> {
+    if (!this.isConfigured) {
+      return this.localStore.createSession(teamId);
+    }
+
     const token = `astrasess_${crypto.randomBytes(32).toString('hex')}`;
     const now = new Date();
     const expires = new Date(now.getTime() + SESSION_TTL_MS);
@@ -190,6 +257,10 @@ export class SupabaseCTFStore {
 
   public async getTeamByToken(token: string): Promise<Team | null> {
     if (!token) return null;
+    if (!this.isConfigured) {
+      return this.localStore.getTeamByToken(token);
+    }
+
     const now = new Date().toISOString();
     const sessions = await this.request(
       'sessions',
@@ -202,6 +273,11 @@ export class SupabaseCTFStore {
 
   public async destroySession(token: string): Promise<void> {
     if (!token) return;
+    if (!this.isConfigured) {
+      this.localStore.destroySession(token);
+      return;
+    }
+
     await this.request(
       'sessions',
       { method: 'PATCH', body: JSON.stringify({ revoked_at: new Date().toISOString() }) },
@@ -239,11 +315,18 @@ export class SupabaseCTFStore {
   }
 
   private async getDisabledChallengeIds(): Promise<Set<string>> {
+    if (!this.isConfigured) {
+      return new Set();
+    }
     const rows = await this.request('competition_settings', {}, '?id=eq.1&select=disabled_challenge_ids&limit=1');
     return new Set(this.getDisabledIdsFromRow(rows?.[0]));
   }
 
   public async getSanitizedChallenges(team?: Team | null) {
+    if (!this.isConfigured) {
+      return this.localStore.getSanitizedChallenges(team);
+    }
+
     const currentTeam = team ? await this.getTeam(team.id) : null;
     const solvedSet = new Set(currentTeam?.solvedChallengeIds || []);
     const hintSet = new Set(currentTeam?.unlockedHintKeys || []);
@@ -281,6 +364,10 @@ export class SupabaseCTFStore {
   }
 
   public async unlockHint(teamId: string, challengeId: string, hintId: number) {
+    if (!this.isConfigured) {
+      return this.localStore.unlockHint(teamId, challengeId, hintId);
+    }
+
     const ch = SERVER_CHALLENGES.find((c) => c.id === challengeId);
     if (!ch) throw new Error('Challenge not found');
     const hint = ch.hints.find((h) => h.id === hintId);
@@ -307,6 +394,10 @@ export class SupabaseCTFStore {
   }
 
   public async submitFlag(teamId: string, challengeId: string, rawFlag: string) {
+    if (!this.isConfigured) {
+      return this.localStore.submitFlag(teamId, challengeId, rawFlag);
+    }
+
     const ch = SERVER_CHALLENGES.find((c) => c.id === challengeId);
     if (!ch) throw new Error('Challenge not found');
 
@@ -365,24 +456,36 @@ export class SupabaseCTFStore {
 
   public async getRecoveredEvidence(team: Team | null): Promise<EvidenceArtifact[]> {
     if (!team) return [];
+    if (!this.isConfigured) {
+      return this.localStore.getRecoveredEvidence(team);
+    }
     const current = await this.getTeam(team.id);
     const set = new Set(current?.evidenceIds || []);
     return EVIDENCE_DATABASE.filter((e) => set.has(e.id));
   }
 
   public async getIncidentTimeline(team: Team | null): Promise<IncidentEvent[]> {
+    if (!this.isConfigured) {
+      return this.localStore.getIncidentTimeline(team);
+    }
     const current = team ? await this.getTeam(team.id) : null;
     const solvedSet = new Set(current?.solvedChallengeIds || []);
     return INCIDENT_TIMELINE.map((item) => ({ ...item, unlocked: solvedSet.has(item.relatedChallengeId) }));
   }
 
   public async getAchievements(team: Team | null): Promise<Achievement[]> {
+    if (!this.isConfigured) {
+      return this.localStore.getAchievements(team);
+    }
     const current = team ? await this.getTeam(team.id) : null;
     const unlockedSet = new Set(current?.achievements || []);
     return INITIAL_ACHIEVEMENTS.map((a) => ({ ...a, unlocked: unlockedSet.has(a.id) }));
   }
 
   public async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    if (!this.isConfigured) {
+      return this.localStore.getLeaderboard();
+    }
     const rows = await this.request(
       'teams',
       {},
@@ -401,6 +504,9 @@ export class SupabaseCTFStore {
   }
 
   public async getSubmissions(limit = 100): Promise<SubmissionRecord[]> {
+    if (!this.isConfigured) {
+      return this.localStore.getSubmissions(limit);
+    }
     const rows = await this.request(
       'submissions',
       {},
@@ -420,15 +526,91 @@ export class SupabaseCTFStore {
   }
 
   public async adminResetCompetition(): Promise<void> {
+    if (!this.isConfigured) {
+      this.localStore.adminResetCompetition();
+      return;
+    }
     await this.rpc('astra_reset_competition', {});
   }
 
   public async adminToggleChallenge(challengeId: string, disable: boolean): Promise<void> {
+    if (!this.isConfigured) {
+      this.localStore.adminToggleChallenge(challengeId, disable);
+      return;
+    }
     if (!SERVER_CHALLENGES.some((c) => c.id === challengeId)) throw new Error('Challenge not found');
     await this.rpc('astra_toggle_challenge', { p_challenge_id: challengeId, p_disable: disable });
   }
 
+  public async adminResetTeam(teamId: string): Promise<void> {
+    if (!this.isConfigured) {
+      this.localStore.adminResetTeam(teamId);
+      return;
+    }
+    // In Supabase mode, update the team record
+    await this.request(
+      'teams',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          score: 0,
+          solved_challenge_ids: [],
+          unlocked_hint_keys: [],
+          wrong_attempts_count: 0,
+          echo_state: 'OBSERVING',
+          threat_level: 1,
+          achievements: [],
+          evidence_ids: [],
+          last_solve_at: null,
+        }),
+      },
+      `?id=eq.${encodeURIComponent(teamId)}`,
+    );
+  }
+
+  public async adminUnlockAllNodes(teamId: string): Promise<void> {
+    if (!this.isConfigured) {
+      this.localStore.adminUnlockAllNodes(teamId);
+      return;
+    }
+    await this.request(
+      'teams',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          solved_challenge_ids: SERVER_CHALLENGES.map((c) => c.id),
+          evidence_ids: EVIDENCE_DATABASE.map((e) => e.id),
+          echo_state: 'CORE',
+          threat_level: 5,
+          score: 3000,
+        }),
+      },
+      `?id=eq.${encodeURIComponent(teamId)}`,
+    );
+  }
+
+  public async adminOverrideEcho(teamId: string, echoState: EchoStateType, threatLevel: number): Promise<void> {
+    if (!this.isConfigured) {
+      this.localStore.adminOverrideEcho(teamId, echoState, threatLevel);
+      return;
+    }
+    await this.request(
+      'teams',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          echo_state: echoState,
+          threat_level: threatLevel,
+        }),
+      },
+      `?id=eq.${encodeURIComponent(teamId)}`,
+    );
+  }
+
   public async getAllTeams(): Promise<Team[]> {
+    if (!this.isConfigured) {
+      return this.localStore.getAllTeams();
+    }
     const rows = await this.request('teams', {}, '?select=*&order=created_at.asc');
     return (rows || []).map((row: any) => this.rowToTeam(row));
   }

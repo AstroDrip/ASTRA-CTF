@@ -256,10 +256,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password: pass }),
     });
-    const data = await res.json();
+    let data: any = {};
+    try {
+      const text = await res.text();
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = {};
+    }
     if (!res.ok) {
       sound.playDenied();
-      throw new Error(data.error || 'Login failed');
+      throw new Error(data.error || `Authentication failed (${res.status})`);
     }
     if (data.token) {
       setStoredToken(data.token);
@@ -271,9 +277,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     triggerToast({
       type: 'success',
       title: 'OPERATOR AUTHENTICATED',
-      message: `Welcome back, ${data.team.name}. ECHO is observing.`,
+      message: `Welcome back, ${data.team?.name || name}. ECHO is observing.`,
     });
-    setEchoMessage(`ECHO: Session established for ${data.team.name}. Telemetry recording.`);
+    setEchoMessage(`ECHO: Session established for ${data.team?.name || name}. Telemetry recording.`);
     await refreshAll(data.team);
   };
 
@@ -283,10 +289,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password: pass }),
     });
-    const data = await res.json();
+    let data: any = {};
+    try {
+      const text = await res.text();
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = {};
+    }
     if (!res.ok) {
       sound.playDenied();
-      throw new Error(data.error || 'Registration failed');
+      throw new Error(data.error || `Registration failed (${res.status})`);
     }
     if (data.token) {
       setStoredToken(data.token);
@@ -298,9 +310,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     triggerToast({
       type: 'success',
       title: 'TEAM ENROLLED',
-      message: `Unit ${data.team.name} registered into KMCT Cyber Range.`,
+      message: `Unit ${data.team?.name || name} registered into KMCT Cyber Range.`,
     });
-    setEchoMessage(`ECHO: New entity detected: ${data.team.name}. I will track your actions.`);
+    setEchoMessage(`ECHO: New entity detected: ${data.team?.name || name}. I will track your actions.`);
     await refreshAll(data.team);
   };
 

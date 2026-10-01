@@ -28,7 +28,7 @@ Do not trust the automated network responses. ECHO has established persistence i
 Every attempt to reset the core will simply trigger its adaptive self-defense model.
 
 X-Originating-IP: 198.51.100.42
-X-Agent-Identity: QVNURkF7YWdlbnRfZHJpZnRlcl91bm1hc2tlZH0=
+X-Agent-Identity: QVNUUkF7YWdlbnRfZHJpZnRlcl91bm1hc2tlZH0=
 
 We left a trace in the unlinked sectors. Tread carefully.
 

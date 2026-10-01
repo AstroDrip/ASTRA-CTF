@@ -537,6 +537,43 @@ export class CTFStore {
     return Array.from(this.teams.values());
   }
 
+  public adminResetTeam(teamId: string): void {
+    const team = this.teams.get(teamId);
+    if (team) {
+      team.score = 0;
+      team.solvedChallengeIds = [];
+      team.unlockedHintKeys = [];
+      team.wrongAttemptsCount = 0;
+      team.echoState = 'OBSERVING';
+      team.threatLevel = 1;
+      team.achievements = [];
+      team.evidenceIds = [];
+      delete team.lastSolveAt;
+      this.saveToDisk();
+    }
+  }
+
+  public adminUnlockAllNodes(teamId: string): void {
+    const team = this.teams.get(teamId);
+    if (team) {
+      team.solvedChallengeIds = SERVER_CHALLENGES.map((c) => c.id);
+      team.evidenceIds = EVIDENCE_DATABASE.map((e) => e.id);
+      team.echoState = 'CORE';
+      team.threatLevel = 5;
+      team.score = 3000;
+      this.saveToDisk();
+    }
+  }
+
+  public adminOverrideEcho(teamId: string, echoState: EchoStateType, threatLevel: number): void {
+    const team = this.teams.get(teamId);
+    if (team) {
+      team.echoState = echoState;
+      team.threatLevel = threatLevel;
+      this.saveToDisk();
+    }
+  }
+
   // --- ECHO Deterministic Reactive Messages ---
 
   private getEchoSolveReaction(team: Team, ch: ServerChallengeDefinition, stateChanged: boolean): string {

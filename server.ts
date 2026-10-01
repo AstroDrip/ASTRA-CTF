@@ -7,9 +7,10 @@ import { store } from './server/supabase-store.js';
 import { SIMULATED_EMAILS, SIMULATED_FILES, SIMULATED_PACKETS } from './server/simulated-data.js';
 
 const PORT = 3000;
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET) {
-  throw new Error('ADMIN_SECRET is required. Set it in the server environment before starting ASTRA.');
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'ASTRA_ADMIN_2026';
+
+if (!process.env.ADMIN_SECRET) {
+  console.warn('[ASTRA AUTH] ⚠️ ADMIN_SECRET environment variable is not configured. Defaulting to fallback passcode: "ASTRA_ADMIN_2026".');
 }
 
 // Extend Express Request
@@ -50,9 +51,41 @@ async function startServer() {
 
   // --- API Routes ---
 
-  // Health check
+  // Health check & System Status
+  const getSystemWarnings = () => {
+    const warnings: string[] = [];
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      warnings.push('Database (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) is not configured. Running in local standalone storage mode.');
+    }
+    if (!process.env.ADMIN_SECRET) {
+      warnings.push('ADMIN_SECRET is not set in environment. Using default fallback passcode ("ASTRA_ADMIN_2026").');
+    }
+    return warnings;
+  };
+
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', time: new Date().toISOString(), simulation: 'ASTRA_ECHO_v2.6' });
+    const warnings = getSystemWarnings();
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString(),
+      simulation: 'ASTRA_ECHO_v2.6',
+      storageMode: store.getStorageMode ? store.getStorageMode() : 'local-fallback',
+      warnings,
+      isSupabaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      isAdminDefault: !process.env.ADMIN_SECRET,
+    });
+  });
+
+  app.get('/api/system/status', (req, res) => {
+    const warnings = getSystemWarnings();
+    res.json({
+      online: true,
+      time: new Date().toISOString(),
+      storageMode: store.getStorageMode ? store.getStorageMode() : 'local-fallback',
+      isSupabaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      isAdminDefault: !process.env.ADMIN_SECRET,
+      warnings,
+    });
   });
 
   // Auth
@@ -503,6 +536,42 @@ KEY: ASTRA{echo_intelligence_quarantined_2026}`,
     const { challengeId, disable } = req.body;
     await store.adminToggleChallenge(challengeId, Boolean(disable));
     res.json({ success: true });
+  });
+
+  // Instructor Admin Tools (Dashboard endpoints)
+  app.post('/api/admin/reset-team', async (req: AuthenticatedRequest, res) => {
+    const teamId = req.body.teamId || req.team?.id;
+    if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    if (store.adminResetTeam) {
+      await store.adminResetTeam(teamId);
+    }
+    res.json({ success: true, message: 'Team state reset successfully.' });
+  });
+
+  app.post('/api/admin/unlock-all-nodes', async (req: AuthenticatedRequest, res) => {
+    const teamId = req.body.teamId || req.team?.id;
+    if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    if (store.adminUnlockAllNodes) {
+      await store.adminUnlockAllNodes(teamId);
+    }
+    res.json({ success: true, message: 'All 18 nodes unlocked for testing.' });
+  });
+
+  app.post('/api/admin/override-echo', async (req: AuthenticatedRequest, res) => {
+    const { teamId, echoState, threatLevel } = req.body;
+    const targetId = teamId || req.team?.id;
+    if (!targetId) return res.status(400).json({ error: 'Team ID is required.' });
+    if (store.adminOverrideEcho) {
+      await store.adminOverrideEcho(targetId, echoState, threatLevel);
+    }
+    res.json({ success: true, message: `ECHO forced to state: ${echoState} [Level ${threatLevel}].` });
+  });
+
+  app.post('/api/admin/trigger-chaos', (req: AuthenticatedRequest, res) => {
+    res.json({
+      success: true,
+      message: 'Simulated network anomaly burst injected across interface opt0.',
+    });
   });
 
   // --- Vite & Static Handling ---
