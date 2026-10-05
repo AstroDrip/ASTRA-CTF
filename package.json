@@ -13,6 +13,7 @@
     "validate:game": "tsx scripts/validate-game.ts"
   },
   "dependencies": {
+    "@rolldown/binding-wasm32-wasi": "1.2.11",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "bcryptjs": "^3.0.3",
