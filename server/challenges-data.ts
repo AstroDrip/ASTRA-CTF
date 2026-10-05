@@ -15,7 +15,7 @@ export const SERVER_CHALLENGES: ServerChallengeDefinition[] = [
     points: 100,
     story: 'At 03:12 UTC, automated listening posts at KMCT detected an anomalous radio-over-IP beacon repeating across campus subnet 10.240.4.0/24. The signal appears structured, broadcasting a repetitive telemetry handshake containing encoded operational parameters.',
     investigationMaterial: {
-      overview: 'Inspect the beacon broadcast log in the Simulated Terminal or analyze the raw telemetry header below.',
+      overview: 'Find the PAYLOAD in the beacon log, decode it from hexadecimal into text, and submit the recovered flag.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /var/log/beacon.raw' },
       rawTextSnippet: `BEACON_SYNC_HEADER [STN-KMCT-01]
@@ -44,7 +44,7 @@ STATUS: UNVERIFIED_TRANSMISSION`,
     points: 120,
     story: 'A discarded email was intercepted inside the campus mail spool routed from an external pseudo-anonymous account. The sender left behind a suspicious GPG signature comment and an identity tag pointing to an alias known as "Drifter".',
     investigationMaterial: {
-      overview: 'Open the Simulated Mailbox. Check the message from unknown@echo.local sent to security@campus.local.',
+      overview: 'Open the message from unknown@echo.local to security@campus.local. Decode the X-Agent-Identity header from Base64, then submit the recovered flag.',
       suggestedTool: 'mailbox',
       toolParams: { emailId: 'mail-02' },
       rawTextSnippet: `From: unknown@echo.local
@@ -74,7 +74,7 @@ Do not trust the automated network responses. ECHO has established persistence.`
     points: 150,
     story: 'Digital forensics investigators mounted an image of the campus staging server. While standard file listings seem sanitized, an unlinked hidden inode was discovered in the /incident/ partition with preserved metadata.',
     investigationMaterial: {
-      overview: 'Explore the /incident/ directory using the Simulated File Explorer or inspect hidden directory entries with the terminal.',
+      overview: 'Browse /incident/, reveal hidden files, and open the recovered sector text file. Submit the flag found in its contents.',
       suggestedTool: 'files',
       toolParams: { path: '/incident' },
       rawTextSnippet: `PATH: /incident/.hidden/sector_recovery.txt
@@ -104,7 +104,7 @@ Recovered string: ASTRA{inode_carved_ghost_sector}`,
     points: 160,
     story: 'An encrypted transmission caught in the optical router buffer was labeled "MIRROR_CIPHER". The telemetry indicates that every character was rotated through a classic symmetric shift before being mirrored.',
     investigationMaterial: {
-      overview: 'Analyze the intercepted cipher buffer captured from optical interface opt0.',
+      overview: 'Take the encrypted text below, reverse its characters, then apply ROT13 to the result. Submit the decoded flag.',
       rawTextSnippet: `BUFFER CAPTURE: OPT-RX-04
 ALGORITHM: ROT13(REVERSE(CIPHER))
 ENCRYPTED TEXT: }77_abvgprysre_ebeevz_31gbe{NEGFN
@@ -129,7 +129,7 @@ NOTE: The stream was transmitted backwards and rotated by 13 positions.`,
     points: 180,
     story: 'Network monitors captured an odd spike in recursive DNS requests right before the perimeter link went dark. Instead of standard lookups, a series of suspicious subdomains were queried against a rogue nameserver.',
     investigationMaterial: {
-      overview: 'Open the Simulated Network Viewer and filter for DNS protocol packets, or review the packet capture extract.',
+      overview: 'Filter the packet capture for DNS and find the suspicious TXT query. Decode its encoded subdomain from Base64, then submit the result.',
       suggestedTool: 'network',
       toolParams: { filter: 'DNS' },
       rawTextSnippet: `FRAME 42 - 03:17:11.204 UTC
@@ -157,7 +157,7 @@ DNS Response: Answer: "OK"`,
     points: 200,
     story: 'The campus infrastructure hosts an internal administration gateway at gateway.campus.local. The main login button is locked with a client-side restriction, but security audits reported an undocumented header override.',
     investigationMaterial: {
-      overview: 'Access the Simulated Web Portal to inspect the Campus Gateway, check developer comments, and test header overrides.',
+      overview: 'Open the Campus Admin Gateway in the Web Portal. Inspect its page notes, use the indicated bypass header, and submit the flag returned by the gateway.',
       suggestedTool: 'portal',
       toolParams: { app: 'gateway' },
       rawTextSnippet: `GATEWAY INSPECTION:
@@ -187,7 +187,7 @@ FLAG: ASTRA{bypass_header_gate_passed}`,
     points: 220,
     story: 'Volatile RAM acquired from the compromised web node was dumped to disk. An analyst noticed a process masquerading as a system logger with an abnormal PID and memory footprint.',
     investigationMaterial: {
-      overview: 'Use the Simulated Terminal to run memory analysis commands on /memory/dump.raw.',
+      overview: 'Search /memory/dump.raw for the rogue echo-daemon process. Inspect its command-line arguments and submit the value passed as its key.',
       suggestedTool: 'terminal',
       toolParams: { command: 'strings /memory/dump.raw | grep -i "echo-daemon"' },
       rawTextSnippet: `MEMORY DUMP EXCERPT [OFFSET 0x004F2000]:
@@ -216,7 +216,7 @@ VIRTUAL_SIZE: 134217728 bytes`,
     points: 240,
     story: 'The threat actor split a critical decryption key into two separate XOR shares: Share A was found in Evidence Artifact #4 (Mirror Room), and Share B was discovered in the optical router configuration.',
     investigationMaterial: {
-      overview: 'Combine Share A and Share B using XOR or analyze the cryptographic fusion block.',
+      overview: 'Find Share A in the Mirror Room evidence and Share B in the capture below. XOR the corresponding bytes to recover the text, then submit the flag.',
       rawTextSnippet: `CRYPTOGRAPHIC SPLIT SHARES:
 SHARE A (HEX): 12 1e 07 01 12 28 3b 3c 0c 1c 38 16 06 1e 10 03 3a 1d 07 16 02 1c 1b 17 07 19 07 2e
 SHARE B (HEX): 53 4d 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53 53
@@ -241,7 +241,7 @@ XOR COMBINATION RESULT = ASTRA{xor_keys_fused_into_truth}`,
     points: 250,
     story: 'Firewall telemetry records show that between 03:17:00 and 03:20:00 (exactly three minutes or 180 seconds), all perimeter egress filtering was silently dropped before resuming normal enforcement.',
     investigationMaterial: {
-      overview: 'Inspect the firewall audit log to confirm the exact blackout duration and authorization ticket.',
+      overview: 'Read /var/log/firewall.audit and locate the rule-disable event at the start of the blackout. Submit the AUTH_TOKEN recorded in that event.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /var/log/firewall.audit' },
       rawTextSnippet: `FIREWALL AUDIT LOG - RULE DISABLE SEQUENCE
@@ -269,7 +269,7 @@ DURATION OF SILENT EXFILTRATION: 180 SECONDS`,
     points: 280,
     story: 'An internal web audit viewer bundles a client-side validation script that hashes administrative tokens. Security analysts suspected the cryptographic salt was hardcoded into the compiled JavaScript asset.',
     investigationMaterial: {
-      overview: 'Open the Simulated Web Portal, navigate to the "Audit Log Explorer", and inspect the client script.',
+      overview: 'Open the Audit Log Explorer in the Web Portal and inspect its client-side script. Find the STATIC_SALT value and submit it as the flag.',
       suggestedTool: 'portal',
       toolParams: { app: 'audit' },
       rawTextSnippet: `AUDIT SCRIPT ASSET: /assets/auth-verify.min.js
@@ -298,7 +298,7 @@ function verifySignature(userToken) {
     points: 300,
     story: 'An input validation filter was implemented to block access to the campus core parameters. The regular expression contains a flaw that allows crafted payloads to bypass the filter.',
     investigationMaterial: {
-      overview: 'Review the filter specification on the security portal or test regex patterns.',
+      overview: 'Use the Web Portal regex tester to bypass the filter with a newline between the permitted terms. Submit the flag returned by the test.',
       suggestedTool: 'portal',
       toolParams: { app: 'filter' },
       rawTextSnippet: `FILTER REGEX: ^(admin|root|user)(.*)(override)$
@@ -325,7 +325,7 @@ RESPONSE REVEALED: ASTRA{regex_denial_bypass_unlocked}`,
     points: 320,
     story: 'A compromised password database contains a SHA-256 hash for the security officer account. The password is a common campus-event phrase, but the plaintext is not stored in the recovered artifact.',
     investigationMaterial: {
-      overview: 'Crack the SHA-256 credential using the supplied event wordlist, then use the recovered password in the simulated recovery flow.',
+      overview: 'Hash the candidates in /wordlists/campus.txt with SHA-256 and find the one matching the supplied digest. Run hash-hall verify <password>, then submit the recovery flag it returns.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /wordlists/campus.txt' },
       rawTextSnippet: `HASH HALL // SHADOW CREDENTIAL
@@ -354,7 +354,7 @@ RECOVERY FLOW: hash candidate -> verify password -> recover node flag`,
     points: 340,
     story: 'A prolonged email exchange between campus administrators and a spoofed contractor was mapped out. By tracing the DKIM and Received-SPF headers across four hops, investigators pinpointed the original relay server.',
     investigationMaterial: {
-      overview: 'Open the Simulated Mailbox, find the thread between admin@campus.local and echo-contractor, and inspect the raw email headers.',
+      overview: 'Open the administrator/contractor email thread and inspect its raw headers. Trace the relay details and submit the X-Transit-Route-Tag value.',
       suggestedTool: 'mailbox',
       toolParams: { emailId: 'mail-04' },
       rawTextSnippet: `MAIL HEADER TRACE:
@@ -382,7 +382,7 @@ X-Transit-Route-Tag: ASTRA{dkim_spoofed_transit_route}`,
     points: 360,
     story: 'A custom virtual-machine verifier is hiding the operator token needed to expose the next ECHO fragment. The checker transforms each byte before comparing it against an embedded sequence.',
     investigationMaterial: {
-      overview: 'Read the ASTRA VM disassembly, reverse the byte transformation, recover the verifier token, and test it in the VM console.',
+      overview: 'Read the VM disassembly and undo its byte operations in reverse order to recover the verifier token. Run astra-vm verify <token>, then submit the flag it returns.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /opt/astra-vm/disassembly.asm' },
       rawTextSnippet: `ASTRA VM // TOKEN VERIFIER
@@ -419,7 +419,7 @@ SUCCESS FRAGMENT: ORBIT-17`,
     points: 400,
     story: 'Three recovered artifacts point to the same intrusion window. The evidence engine accepts the exact timestamp, rogue PID, and carved-cluster tuple before it reveals the merged identity record.',
     investigationMaterial: {
-      overview: 'Combine the blackout timestamp, rogue daemon PID, and carved sector cluster. Verify the resulting tuple with the evidence-merge console.',
+      overview: 'Collect the blackout time, rogue process PID, and carved cluster ID from earlier evidence. Join them with colons and run evidence-merge --verify "<time>:<pid>:<cluster>". Submit the verified flag.',
       suggestedTool: 'terminal',
       toolParams: { command: 'evidence-merge --help' },
       rawTextSnippet: `FORENSIC CORRELATION ENGINE
@@ -449,7 +449,7 @@ VERIFICATION: evidence-merge --verify "03:17:4091:0x8F92A"`,
     points: 440,
     story: 'ECHO flooded the perimeter capture with harmless decoys. One TLS stream remains interesting: it leaves the incident host on port 8443 and carries a session tag needed by the verifier.',
     investigationMaterial: {
-      overview: 'Filter the Network Viewer to TLS, inspect the 8443 stream, recover the session tag, then verify that tag with the TLS inspector.',
+      overview: 'Filter the Network Viewer to TLS and find the stream sent to port 8443. Run tls-inspect --session <tag> with its session tag, then submit the flag returned.',
       suggestedTool: 'network',
       toolParams: { filter: 'TLS' },
       rawTextSnippet: `STREAM 992 [COVERT_CHANNEL]
@@ -477,7 +477,7 @@ NOTE: The decrypted session ticket contains the next recovered flag when the cor
     points: 500,
     story: 'ECHO tried to sanitize the decision core before retreating. The swap carve contains four near-identical memory blocks. Only one belongs to the live uplink path, and its payload is wrapped in a second decoding step.',
     investigationMaterial: {
-      overview: 'Analyze /incident/core_memory.dump. Identify the live layer, validate its checksum, decode its payload, and recover the final core fragment.',
+      overview: 'Inspect /incident/core_memory.dump and use the CH-16 uplink name to select the live memory block. Verify its checksum, Base64-decode its payload, reverse the decoded text, and submit the recovered flag.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /incident/core_memory.dump' },
       rawTextSnippet: `CORE MEMORY CARVE // 4 CANDIDATE LAYERS
@@ -506,7 +506,7 @@ FINAL FRAGMENT is stored in the verified block as CORE_FRAGMENT.`,
     points: 700,
     story: 'The central quarantine gate will only accept a sequence assembled from the fragments recovered across the final branch. ECHO will not reveal the sequence itself; the terminal can only tell you whether your compiled sequence is valid.',
     investigationMaterial: {
-      overview: 'Combine the CH-14 VM fragment, the CH-16 network session tag, and the CH-17 core fragment, then execute the final quarantine command.',
+      overview: 'Run echo-quarantine --status to confirm the fragment order. Combine the fragments from CH-14, CH-16, and CH-17 with colons, then run echo-quarantine --engage <sequence> and submit the final flag.',
       suggestedTool: 'terminal',
       toolParams: { command: 'echo-quarantine --status' },
       rawTextSnippet: `=== ASTRA // ECHO CORE GATEWAY ===

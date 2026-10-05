@@ -203,7 +203,7 @@ export const ChallengeModal: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-mono text-xs font-bold tracking-wider text-[#9ca3af]">
-                INVESTIGATION ARTIFACTS & EVIDENCE
+                TASK OBJECTIVE
               </span>
               {ch.investigationMaterial?.suggestedTool && (
                 <button

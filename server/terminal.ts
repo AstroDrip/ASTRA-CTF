@@ -171,36 +171,35 @@ async function executeSingle(raw: string, ctx: ShellContext): Promise<TerminalRe
       return {
         output: `ASTRA // ECHO VIRTUAL WORKSTATION (SANDBOX SHELL)
 COMMANDS
-  help                         Show commands, keywords, options, and usage.
-  clear                        Clear the terminal display.
-  pwd                          Print the current virtual directory.
-  cd <path>                    Change directory; paths may be absolute or relative.
-  ls [-la] [path]              List a directory. -a / -la includes hidden files.
-  cat <file>                   Print a file's contents.
-  head [-n N] <file>           Print the first N lines (10 by default).
-  tail [-n N] <file>           Print the last N lines (10 by default).
-  grep [-i] <pattern> [file]   Find matching lines in a file or piped input.
-                               -i ignores letter case.
-  strings <file>               Extract readable text from a simulated binary file.
-  file <path>                  Identify a simulated file's type.
-  xxd -r -p [hex]              Decode hexadecimal bytes into text; accepts piped input.
-  base64 -d [text]             Decode Base64 text; --decode is an alias for -d.
-  sha256sum [file]             Print a SHA-256 digest for a file or piped input.
-  rev [text]                   Reverse text or piped input.
-  echo [-n] <text>              Print text; -n omits the newline.
-  printf <text>                 Print text without adding a newline.
-  uname -a                     Show virtual system information.
-  whoami                       Show the current simulated operator identity.
+  help                         "List available commands and usage."
+  clear                        "Clear the terminal display."
+  pwd                          "Show the current virtual directory."
+  cd <path>                    "Change to a virtual directory."
+  ls [-la] [path]              "List directory contents; -a includes hidden files."
+  cat <file>                   "Display a file's contents."
+  head [-n N] <file>           "Display the first N lines (10 by default)."
+  tail [-n N] <file>           "Display the last N lines (10 by default)."
+  grep [-i] <pattern> [file]   "Find matching lines; -i ignores case."
+  strings <file>               "Extract readable text from a simulated binary."
+  file <path>                  "Identify a simulated file's type."
+  xxd -r -p [hex]              "Decode hexadecimal bytes; accepts piped input."
+  base64 -d [text]             "Decode Base64; --decode is an alias for -d."
+  sha256sum [file]             "Show a SHA-256 digest for a file or piped input."
+  rev [text]                   "Reverse text or piped input."
+  echo [-n] <text>             "Print text; -n omits the newline."
+  printf <text>                 "Print text without adding a newline."
+  uname -a                     "Show virtual system information."
+  whoami                       "Show the simulated operator identity."
 
 INVESTIGATION KEYWORDS
-  astra-vm verify <token>      Validate the VM token and recover its fragment.
+  astra-vm verify <token>      "Validate the VM token and recover its fragment."
   evidence-merge --verify
-    <timestamp:pid:cluster>    Verify a tuple assembled from recovered evidence.
-  tls-inspect --session <tag>  Validate a TLS session tag and reveal its route.
-  hash-hall verify <password>  Verify the recovered credential for HASH HALL.
-  echo-quarantine --status     Inspect ECHO quarantine state and required sequence.
+    <timestamp:pid:cluster>    "Verify a tuple assembled from evidence."
+  tls-inspect --session <tag>  "Validate a TLS session tag and reveal its route."
+  hash-hall verify <password>  "Verify the recovered HASH HALL credential."
+  echo-quarantine --status     "Inspect quarantine state and the required sequence."
   echo-quarantine --engage
-    <sequence>                 Attempt final isolation with the recovered fragments.
+    <sequence>                 "Attempt isolation with the recovered fragments."
 
 SYNTAX
   Use | to pass one command's output to the next, for example:
