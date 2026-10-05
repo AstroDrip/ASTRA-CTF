@@ -145,11 +145,11 @@ export const AuthModal: React.FC = () => {
             <div>
               {isLogin ? (
                 <span>
-                  Enter your registered <strong className="text-white">Callsign</strong> and <strong className="text-white">Passphrase</strong>. Team names are case-insensitive.
+                  Enter your registered <strong className="text-white">Team Callsign</strong> and <strong className="text-white">Passphrase</strong>. Both teammates use the same team credentials on their own devices. A team may have up to 2 active player sessions.
                 </span>
               ) : (
                 <span>
-                  Create your unit callsign (3–28 chars) and secure passphrase (min 4 chars). Sessions persist automatically.
+                  Create your team callsign (3–28 chars) and secure passphrase (min 4 chars). Share the team credentials with your second player so both browsers work on the same progress.
                 </span>
               )}
             </div>

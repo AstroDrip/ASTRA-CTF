@@ -9,7 +9,8 @@ import {
   EchoStateType, 
   EvidenceArtifact, 
   IncidentEvent, 
-  Achievement 
+  Achievement,
+  SystemEvent,
 } from '../src/types.js';
 import { 
   SERVER_CHALLENGES, 
@@ -31,6 +32,7 @@ export class CTFStore {
   private sessions: Map<string, Session> = new Map(); // token -> Session
   private submissions: SubmissionRecord[] = [];
   private disabledChallengeIds: Set<string> = new Set();
+  private systemEvents: SystemEvent[] = [];
 
   private dataDir = path.join(process.cwd(), '.data');
   private dataFilePath = path.join(process.cwd(), '.data', 'ctf_store.json');
@@ -54,6 +56,7 @@ export class CTFStore {
         sessions: Array.from(this.sessions.entries()),
         submissions: this.submissions,
         disabledChallengeIds: Array.from(this.disabledChallengeIds.values()),
+        systemEvents: this.systemEvents,
       };
       fs.writeFileSync(this.dataFilePath, JSON.stringify(serialized, null, 2), 'utf8');
     } catch (err) {
@@ -72,6 +75,7 @@ export class CTFStore {
           this.sessions = new Map(data.sessions || []);
           this.submissions = data.submissions || [];
           this.disabledChallengeIds = new Set(data.disabledChallengeIds || []);
+          this.systemEvents = Array.isArray(data.systemEvents) ? data.systemEvents : [];
           return true;
         }
       }
@@ -224,6 +228,9 @@ export class CTFStore {
   }
 
   public createSession(teamId: string): string {
+    if (this.getActiveSessionCount(teamId) >= 2) {
+      throw new Error('This team already has two active player sessions. Log out one player before connecting another device.');
+    }
     const token = 'astrasess_' + crypto.randomBytes(32).toString('hex');
     this.sessions.set(token, {
       token,
@@ -243,6 +250,27 @@ export class CTFStore {
   public destroySession(token: string): void {
     this.sessions.delete(token);
     this.saveToDisk();
+  }
+
+  public getActiveSessions(): Array<{ id: string; teamId: string; createdAt: string }> {
+    const now = Date.now();
+    const ttl = 7 * 24 * 60 * 60 * 1000;
+    return Array.from(this.sessions.values())
+      .filter((session) => now - session.createdAt < ttl)
+      .map((session) => ({
+        id: crypto.createHash('sha256').update(session.token).digest('hex').slice(0, 12),
+        teamId: session.teamId,
+        createdAt: new Date(session.createdAt).toISOString(),
+      }));
+  }
+
+  public adminRevokeSession(teamId: string, sessionId: string): void {
+    const matches = Array.from(this.sessions.values()).filter((session) =>
+      session.teamId === teamId &&
+      crypto.createHash('sha256').update(session.token).digest('hex').startsWith(sessionId),
+    );
+    if (matches.length !== 1) throw new Error(matches.length ? 'Session identifier is ambiguous.' : 'Active session not found.');
+    this.destroySession(matches[0].token);
   }
 
   // --- Challenges & Scoring ---
@@ -276,6 +304,7 @@ export class CTFStore {
         title: ch.title,
         category: ch.category,
         difficulty: ch.difficulty,
+        difficultyRating: ch.difficultyRating,
         points: ch.points,
         story: ch.story,
         investigationMaterial: ch.investigationMaterial,
@@ -300,17 +329,19 @@ export class CTFStore {
 
     const hintKey = `${challengeId}_hint_${hintId}`;
     if (team.unlockedHintKeys.includes(hintKey)) {
-      return { hintContent: hint.content, team };
+      return { hintContent: hint.content, hintPenalty: 0, team };
     }
 
-    // Deduct points
-    team.score = Math.max(0, team.score - hint.cost);
+    if (team.solvedChallengeIds.includes(challengeId)) {
+      throw new Error('Hints cannot be unlocked after this challenge is solved.');
+    }
+
     team.unlockedHintKeys.push(hintKey);
     this.saveToDisk();
 
     return {
       hintContent: hint.content,
-      costDeducted: hint.cost,
+      hintPenalty: hint.cost,
       team,
     };
   }
@@ -321,6 +352,12 @@ export class CTFStore {
 
     const ch = SERVER_CHALLENGES.find((c) => c.id === challengeId);
     if (!ch) throw new Error('Challenge not found');
+
+    const hintPenalty = ch.hints.reduce(
+      (total, hint) => total + (team.unlockedHintKeys.includes(`${ch.id}_hint_${hint.id}`) ? hint.cost : 0),
+      0,
+    );
+    const pointsAwarded = Math.max(0, ch.points - hintPenalty);
 
     if (this.disabledChallengeIds.has(challengeId)) {
       throw new Error('This challenge is currently locked by the administrator.');
@@ -346,7 +383,7 @@ export class CTFStore {
       isCorrect,
       timestamp: new Date().toISOString(),
       attemptedFlag: normalizedSubmitted,
-      pointsDelta: isCorrect ? ch.points : -5,
+      pointsDelta: isCorrect ? pointsAwarded : -5,
     };
     this.submissions.unshift(submissionRecord);
 
@@ -366,7 +403,7 @@ export class CTFStore {
     }
 
     // Correct flag
-    team.score += ch.points;
+    team.score += pointsAwarded;
     team.solvedChallengeIds.push(ch.id);
     team.lastSolveAt = new Date().toISOString();
 
@@ -448,7 +485,7 @@ export class CTFStore {
 
     return {
       correct: true,
-      pointsAwarded: ch.points,
+      pointsAwarded,
       recoveredEvidence,
       echoReaction,
       echoState: team.echoState,
@@ -513,6 +550,60 @@ export class CTFStore {
     return this.submissions.slice(0, limit);
   }
 
+  public getActiveSessionCount(teamId: string): number {
+    const now = Date.now();
+    const ttl = 7 * 24 * 60 * 60 * 1000;
+    return Array.from(this.sessions.values()).filter((session) => session.teamId === teamId && now - session.createdAt < ttl).length;
+  }
+
+  public getActiveSessionCounts(): Record<string, number> {
+    const result: Record<string, number> = {};
+    const now = Date.now();
+    const ttl = 7 * 24 * 60 * 60 * 1000;
+    for (const session of this.sessions.values()) {
+      if (now - session.createdAt >= ttl) continue;
+      result[session.teamId] = (result[session.teamId] || 0) + 1;
+    }
+    return result;
+  }
+
+  public recordSystemEvent(
+    level: SystemEvent['level'],
+    eventType: string,
+    message: string,
+    teamId: string | null = null,
+    metadata: Record<string, unknown> = {},
+  ): void {
+    this.systemEvents.unshift({
+      id: crypto.randomUUID(),
+      level,
+      eventType,
+      message: String(message).slice(0, 1000),
+      teamId,
+      createdAt: new Date().toISOString(),
+      metadata,
+    });
+    this.systemEvents = this.systemEvents.slice(0, 500);
+    this.saveToDisk();
+  }
+
+  public getSystemEvents(limit = 100): SystemEvent[] {
+    return this.systemEvents.slice(0, Math.min(Math.max(limit, 1), 500));
+  }
+
+  public getTeamSnapshot(teamId: string) {
+    const current = this.teams.get(teamId);
+    if (!current) throw new Error('Team not found');
+    return {
+      team: current,
+      challenges: this.getSanitizedChallenges(current),
+      evidence: this.getRecoveredEvidence(current),
+      timeline: this.getIncidentTimeline(current),
+      achievements: this.getAchievements(current),
+      activePlayerCount: this.getActiveSessionCount(teamId),
+    };
+  }
+
   // --- Admin Methods ---
 
   public adminResetCompetition(): void {
@@ -551,6 +642,12 @@ export class CTFStore {
       delete team.lastSolveAt;
       this.saveToDisk();
     }
+  }
+
+  public async adminChangeTeamPassword(teamId: string, password: string): Promise<void> {
+    if (!this.teams.has(teamId)) throw new Error('Team not found');
+    this.passwordHashes.set(teamId, await bcrypt.hash(password, 10));
+    this.saveToDisk();
   }
 
   public adminUnlockAllNodes(teamId: string): void {

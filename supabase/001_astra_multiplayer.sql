@@ -92,19 +92,18 @@ begin
   end if;
 
   if hints @> to_jsonb(p_hint_key) then
-    return jsonb_build_object('ok', true, 'cost_deducted', 0);
+    return jsonb_build_object('ok', true, 'penalty_deferred', 0);
   end if;
 
-  if t.score < p_cost then
-    return jsonb_build_object('ok', false, 'error', 'Insufficient score to unlock this hint.');
+  if solved @> to_jsonb(p_challenge_id) then
+    return jsonb_build_object('ok', false, 'error', 'Hints cannot be unlocked after this challenge is solved.');
   end if;
 
   update public.teams
-  set score = score - p_cost,
-      unlocked_hint_keys = hints || to_jsonb(p_hint_key)
+  set unlocked_hint_keys = hints || to_jsonb(p_hint_key)
   where id = p_team_id;
 
-  return jsonb_build_object('ok', true, 'cost_deducted', p_cost);
+  return jsonb_build_object('ok', true, 'penalty_deferred', greatest(p_cost, 0));
 end;
 $$;
 
@@ -130,7 +129,7 @@ declare
   old_state text;
   solved jsonb;
   evidence jsonb;
-  achievements jsonb;
+  team_achievements jsonb;
   new_achievements jsonb := '[]'::jsonb;
   solved_count integer;
 begin
@@ -176,7 +175,7 @@ begin
   solved := solved || to_jsonb(p_challenge_id);
   solved_count := jsonb_array_length(solved);
   evidence := coalesce(t.evidence_ids, '[]'::jsonb);
-  achievements := coalesce(t.achievements, '[]'::jsonb);
+  team_achievements := coalesce(t.achievements, '[]'::jsonb);
 
   if p_evidence_id is not null and not (evidence @> to_jsonb(p_evidence_id)) then
     evidence := evidence || to_jsonb(p_evidence_id);
@@ -192,41 +191,41 @@ begin
     update public.teams set echo_state = 'OBSERVING', threat_level = 2 where id = p_team_id;
   end if;
 
-  if solved_count >= 1 and not (achievements @> '"ach-01"'::jsonb) then
-    achievements := achievements || '"ach-01"'::jsonb;
+  if solved_count >= 1 and not (team_achievements @> '"ach-01"'::jsonb) then
+    team_achievements := team_achievements || '"ach-01"'::jsonb;
     new_achievements := new_achievements || '"ach-01"'::jsonb;
   end if;
 
   if not exists (
     select 1 from jsonb_array_elements_text(coalesce(t.unlocked_hint_keys, '[]'::jsonb)) h
     where h like p_challenge_id || '_hint_%'
-  ) and not (achievements @> '"ach-02"'::jsonb) then
-    achievements := achievements || '"ach-02"'::jsonb;
+  ) and not (team_achievements @> '"ach-02"'::jsonb) then
+    team_achievements := team_achievements || '"ach-02"'::jsonb;
     new_achievements := new_achievements || '"ach-02"'::jsonb;
   end if;
 
-  if solved_count >= 3 and t.wrong_attempts_count = 0 and not (achievements @> '"ach-03"'::jsonb) then
-    achievements := achievements || '"ach-03"'::jsonb;
+  if solved_count >= 3 and t.wrong_attempts_count = 0 and not (team_achievements @> '"ach-03"'::jsonb) then
+    team_achievements := team_achievements || '"ach-03"'::jsonb;
     new_achievements := new_achievements || '"ach-03"'::jsonb;
   end if;
 
-  if jsonb_array_length(evidence) >= 10 and not (achievements @> '"ach-04"'::jsonb) then
-    achievements := achievements || '"ach-04"'::jsonb;
+  if jsonb_array_length(evidence) >= 10 and not (team_achievements @> '"ach-04"'::jsonb) then
+    team_achievements := team_achievements || '"ach-04"'::jsonb;
     new_achievements := new_achievements || '"ach-04"'::jsonb;
   end if;
 
-  if solved_count >= 9 and not (achievements @> '"ach-05"'::jsonb) then
-    achievements := achievements || '"ach-05"'::jsonb;
+  if solved_count >= 9 and not (team_achievements @> '"ach-05"'::jsonb) then
+    team_achievements := team_achievements || '"ach-05"'::jsonb;
     new_achievements := new_achievements || '"ach-05"'::jsonb;
   end if;
 
-  if solved_count >= 7 and not (achievements @> '"ach-06"'::jsonb) then
-    achievements := achievements || '"ach-06"'::jsonb;
+  if solved_count >= 7 and not (team_achievements @> '"ach-06"'::jsonb) then
+    team_achievements := team_achievements || '"ach-06"'::jsonb;
     new_achievements := new_achievements || '"ach-06"'::jsonb;
   end if;
 
-  if p_challenge_id = 'ch-18' and not (achievements @> '"ach-07"'::jsonb) then
-    achievements := achievements || '"ach-07"'::jsonb;
+  if p_challenge_id = 'ch-18' and not (team_achievements @> '"ach-07"'::jsonb) then
+    team_achievements := team_achievements || '"ach-07"'::jsonb;
     new_achievements := new_achievements || '"ach-07"'::jsonb;
   end if;
 
@@ -234,7 +233,7 @@ begin
   set score = score + p_points,
       solved_challenge_ids = solved,
       evidence_ids = evidence,
-      achievements = achievements,
+      achievements = team_achievements,
       last_solve_at = now()
   where id = p_team_id;
 
@@ -304,3 +303,23 @@ revoke all on function public.astra_unlock_hint(text,text,text,integer,text[],bo
 revoke all on function public.astra_submit_flag(text,text,text,text,integer,text,text,text[],boolean) from public, anon, authenticated;
 revoke all on function public.astra_toggle_challenge(text,boolean) from public, anon, authenticated;
 revoke all on function public.astra_reset_competition() from public, anon, authenticated;
+
+-- Event-operator telemetry. The Express server accesses this table with the
+-- service-role key; it is never exposed directly to competitors.
+create table if not exists public.system_events (
+  id uuid primary key default gen_random_uuid(),
+  level text not null check (level in ('INFO', 'WARN', 'ERROR')),
+  event_type text not null,
+  message text not null,
+  team_id text references public.teams(id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists system_events_created_at_idx on public.system_events(created_at desc);
+create index if not exists system_events_team_id_idx on public.system_events(team_id);
+
+alter table public.system_events enable row level security;
+
+-- The production browser never receives the service-role key, so no public
+-- policies are created for system_events.

@@ -489,7 +489,7 @@ export const WarRoomView: React.FC = () => {
                 {/* Footer status */}
                 <div className="mt-4 flex items-center justify-between border-t border-[#1b2129] pt-3 font-mono text-[11px]">
                   <span className="text-[#6b7280]">
-                    DIFF: <span className="text-gray-300">{ch.difficulty}</span>
+                    DIFF: <span className="text-gray-300">{ch.difficulty} · {ch.difficultyRating}/7</span>
                   </span>
 
                   <div>

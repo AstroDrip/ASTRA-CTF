@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   Team, 
@@ -37,7 +37,7 @@ interface AppContextType {
   isFieldBriefingOpen: boolean;
   setIsFieldBriefingOpen: (open: boolean) => void;
   selectedChallenge: Challenge | null;
-  setSelectedChallenge: (challenge: Challenge | null) => void;
+  setSelectedChallenge: React.Dispatch<React.SetStateAction<Challenge | null>>;
   activeSimulatedTool: 'terminal' | 'mailbox' | 'network' | 'files' | 'portal' | null;
   activeToolParams: Record<string, string> | null;
   openSimulatedTool: (tool: 'terminal' | 'mailbox' | 'network' | 'files' | 'portal', params?: Record<string, string>) => void;
@@ -56,6 +56,7 @@ interface AppContextType {
   unlockHint: (challengeId: string, hintId: number) => Promise<string>;
   apiFetch: (url: string, init?: RequestInit) => Promise<Response>;
   isMissionCompleteOpen: boolean;
+  liveSyncAt: string | null;
   setIsMissionCompleteOpen: (open: boolean) => void;
 }
 
@@ -100,7 +101,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [evidence, setEvidence] = useState<EvidenceArtifact[]>([]);
   const [timeline, setTimeline] = useState<IncidentEvent[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [activeView, setActiveView] = useState<AppView>('landing');
+  const [activeView, setCurrentView] = useState<AppView>(() =>
+    typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/admin'
+      ? 'admin'
+      : 'landing',
+  );
+  const setActiveView = useCallback((view: AppView) => {
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (view === 'admin' && currentPath !== '/admin') {
+        window.history.pushState({}, '', '/admin');
+      } else if (view !== 'admin' && currentPath === '/admin') {
+        window.history.replaceState({}, '', '/');
+      }
+    }
+    setCurrentView(view);
+  }, []);
+
+  useEffect(() => {
+    const syncViewWithLocation = () => {
+      setCurrentView(window.location.pathname.replace(/\/+$/, '') === '/admin' ? 'admin' : 'landing');
+    };
+    window.addEventListener('popstate', syncViewWithLocation);
+    return () => window.removeEventListener('popstate', syncViewWithLocation);
+  }, []);
 
   const apiFetch = useCallback(async (url: string, init: RequestInit = {}) => {
     const token = getStoredToken();
@@ -137,6 +161,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isFieldBriefingOpen, setIsFieldBriefingOpen] = useState(false);
   const [isMissionCompleteOpen, setIsMissionCompleteOpen] = useState(false);
+  const [liveSyncAt, setLiveSyncAt] = useState<string | null>(null);
+  const syncErrorReportedAt = useRef(0);
 
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [activeSimulatedTool, setActiveSimulatedTool] = useState<'terminal' | 'mailbox' | 'network' | 'files' | 'portal' | null>(null);
@@ -193,7 +219,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (chRes.ok) {
         const chData = await chRes.json();
-        setChallenges(chData.challenges || []);
+        const refreshedChallenges = chData.challenges || [];
+        setChallenges(refreshedChallenges);
+        setSelectedChallenge((current) =>
+          current
+            ? refreshedChallenges.find((challenge: Challenge) => challenge.id === current.id) || current
+            : null,
+        );
       }
       if (evRes.ok) {
         const evData = await evRes.json();
@@ -215,6 +247,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  // Both players use the same team-scoped state. A lightweight two-second poll
+  // keeps a second browser synchronized without exposing another team's state.
+  useEffect(() => {
+    if (!team) return;
+    let disposed = false;
+    const syncTeamState = async () => {
+      try {
+        const res = await apiFetch('/api/team/state');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (disposed) return;
+        if (data.team) setTeam({ ...data.team, activePlayerCount: data.activePlayerCount });
+        if (Array.isArray(data.challenges)) {
+          setChallenges(data.challenges);
+          setSelectedChallenge((current) =>
+            current
+              ? data.challenges.find((challenge: Challenge) => challenge.id === current.id) || current
+              : null,
+          );
+        }
+        if (Array.isArray(data.evidence)) setEvidence(data.evidence);
+        if (Array.isArray(data.timeline)) setTimeline(data.timeline);
+        if (Array.isArray(data.achievements)) setAchievements(data.achievements);
+        setLiveSyncAt(new Date().toISOString());
+      } catch (error) {
+        const now = Date.now();
+        if (now - syncErrorReportedAt.current > 15000) {
+          syncErrorReportedAt.current = now;
+          try {
+            await apiFetch('/api/client-events', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ level: 'WARN', eventType: 'live_sync_failure', message: 'Team state synchronization failed.', metadata: { error: String(error) } }),
+            });
+          } catch {
+            // Ignore telemetry failures while the main API is unreachable.
+          }
+        }
+      }
+    };
+
+    syncTeamState();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') syncTeamState();
+    }, 2000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [team?.id, apiFetch]);
 
   const toggleMotion = () => {
     setMotionEnabled((prev) => !prev);
@@ -350,7 +434,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     triggerToast({
       type: 'info',
       title: 'HINT DECRYPTED',
-      message: `Deducted ${data.costDeducted || 0} points from score.`,
+      message: data.hintPenalty
+        ? `${data.hintPenalty} point penalty will reduce this chapter's reward when solved.`
+        : 'This hint is already unlocked; no additional penalty applies.',
     });
     await refreshAll();
     return data.hintContent;
@@ -405,12 +491,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         colors: ['#ccff00', '#00f0ff', '#ffffff'],
       });
     }
-
-    triggerToast({
-      type: 'success',
-      title: 'FLAG ACCEPTED // EVIDENCE RECOVERED',
-      message: `+${data.pointsAwarded} points awarded. Node cleared!`,
-    });
 
     if (data.echoReaction) {
       setEchoMessage(data.echoReaction);
@@ -482,6 +562,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         apiFetch,
         isMissionCompleteOpen,
         setIsMissionCompleteOpen,
+        liveSyncAt,
       }}
     >
       {children}

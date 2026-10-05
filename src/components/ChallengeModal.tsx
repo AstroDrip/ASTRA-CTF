@@ -49,11 +49,19 @@ export const ChallengeModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedChallenge, setSelectedChallenge]);
 
+  React.useEffect(() => {
+    setFlagInput('');
+    setSubmissionFeedback(null);
+    setPendingHintId(null);
+  }, [selectedChallenge?.id]);
+
   if (!selectedChallenge) return null;
 
   const ch = selectedChallenge;
   const isSolved = ch.isSolved;
   const isLocked = ch.isLocked;
+  const hintPenalty = ch.hints.reduce((total, hint) => total + (hint.unlocked ? hint.cost : 0), 0);
+  const chapterReward = Math.max(0, ch.points - hintPenalty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,13 +102,17 @@ export const ChallengeModal: React.FC = () => {
     if (!pendingHintId) return;
     setUnlockingHint(true);
     try {
-      await unlockHint(ch.id, pendingHintId);
-      // Update local hint state
-      ch.hints = ch.hints.map((h) => {
-        if (h.id === pendingHintId) {
-          return { ...h, unlocked: true };
-        }
-        return h;
+      const hintContent = await unlockHint(ch.id, pendingHintId);
+      setSelectedChallenge((current) => {
+        if (!current || current.id !== ch.id) return current;
+        return {
+          ...current,
+          hints: current.hints.map((hint) =>
+            hint.id === pendingHintId
+              ? { ...hint, content: hintContent, unlocked: true }
+              : hint,
+          ),
+        };
       });
       setPendingHintId(null);
     } catch (err: any) {
@@ -140,12 +152,13 @@ export const ChallengeModal: React.FC = () => {
             <span className="font-mono text-xs font-semibold text-[#00f0ff]">
               {ch.category}
             </span>
-            <span className="font-mono text-xs text-[#6b7280]">[{ch.difficulty}]</span>
+            <span className="font-mono text-xs text-[#6b7280]">[{ch.difficulty} · {ch.difficultyRating}/7]</span>
           </div>
 
           <div className="flex items-center space-x-4">
             <div className="font-mono text-sm font-bold text-[#ccff00]">
-              +{ch.points} PTS
+              +{chapterReward} PTS
+              {hintPenalty > 0 && <span className="ml-1 text-[10px] text-[#9ca3af]">({hintPenalty} HINT PENALTY)</span>}
             </div>
             <button
               id="close-challenge-btn"
@@ -267,7 +280,7 @@ export const ChallengeModal: React.FC = () => {
                 <span>PROGRESSIVE HINTS ({ch.hints.length})</span>
               </span>
               <span className="font-mono text-[10px] text-[#6b7280]">
-                PENALTY: −25 / −50 / −75 PTS
+                CHAPTER REWARD PENALTY: −25 / −50 / −75 PTS
               </span>
             </div>
 
@@ -287,13 +300,13 @@ export const ChallengeModal: React.FC = () => {
                       <span className="font-mono text-xs font-bold text-[#ccff00]">
                         HINT 0{idx + 1}
                       </span>
-                      {!isUnlocked ? (
+                      {!isUnlocked && !isSolved ? (
                         <button
                           id={`unlock-hint-${h.id}-btn`}
                           onClick={() => setPendingHintId(h.id)}
                           className="border border-[#1b2129] bg-[#12161d] px-2.5 py-1 font-mono text-[11px] text-[#f43f5e] hover:border-[#f43f5e]"
                         >
-                          DECRYPT (−{h.cost} PTS)
+                          DECRYPT (−{h.cost} ON SOLVE)
                         </button>
                       ) : (
                         <span className="font-mono text-[10px] text-[#ccff00]">
@@ -315,7 +328,7 @@ export const ChallengeModal: React.FC = () => {
             {pendingHintId && (
               <div className="mt-3 border border-[#f43f5e]/50 bg-[#f43f5e]/10 p-3">
                 <p className="font-mono text-xs text-[#f3f4f6]">
-                  CONFIRM DECRYPTION: This action will deduct points from your team's score. Continue?
+                  CONFIRM DECRYPTION: This penalty will reduce this chapter's reward when solved. Continue?
                 </p>
                 <div className="mt-2 flex space-x-2">
                   <button
@@ -324,7 +337,7 @@ export const ChallengeModal: React.FC = () => {
                     disabled={unlockingHint}
                     className="border border-[#f43f5e] bg-[#f43f5e] px-3 py-1 font-mono text-xs font-bold text-white"
                   >
-                    {unlockingHint ? 'DECRYPTING...' : 'YES, DEDUCT POINTS'}
+                    {unlockingHint ? 'DECRYPTING...' : 'YES, APPLY CHAPTER PENALTY'}
                   </button>
                   <button
                     onClick={() => setPendingHintId(null)}

@@ -11,6 +11,7 @@ export const TerminalModal: React.FC = () => {
 Session initialized. Safe sandbox active. Type 'help' for available commands.`,
     },
   ]);
+  const [cwd, setCwd] = useState('/home/investigator');
   const [inputVal, setInputVal] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -22,8 +23,11 @@ Session initialized. Safe sandbox active. Type 'help' for available commands.`,
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (activeSimulatedTool === 'terminal' && activeToolParams?.command) {
-      handleRunCommand(activeToolParams.command);
+    if (activeSimulatedTool === 'terminal') {
+      setCwd('/home/investigator');
+      if (activeToolParams?.command) {
+        handleRunCommand(activeToolParams.command, '/home/investigator');
+      }
     }
   }, [activeSimulatedTool, activeToolParams]);
 
@@ -33,7 +37,7 @@ Session initialized. Safe sandbox active. Type 'help' for available commands.`,
 
   if (activeSimulatedTool !== 'terminal') return null;
 
-  const handleRunCommand = async (cmdToRun: string) => {
+  const handleRunCommand = async (cmdToRun: string, commandCwd = cwd) => {
     const trimmed = cmdToRun.trim();
     if (!trimmed) return;
 
@@ -48,10 +52,11 @@ Session initialized. Safe sandbox active. Type 'help' for available commands.`,
       const res = await fetch('/api/simulated/terminal/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: trimmed }),
+        body: JSON.stringify({ command: trimmed, cwd: commandCwd }),
       });
       const data = await res.json();
       setHistory((prev) => [...prev, { cmd: trimmed, output: data.output || '' }]);
+      if (typeof data.cwd === 'string') setCwd(data.cwd);
       setCommandHistory((prev) => [...prev, trimmed]);
       setHistoryIndex(-1);
     } catch {
@@ -229,7 +234,7 @@ Session initialized. Safe sandbox active. Type 'help' for available commands.`,
               {item.cmd !== 'init' && (
                 <div className="flex items-center justify-between text-[#ccff00]">
                   <div className="flex items-center space-x-2">
-                    <span className="text-[#6b7280] select-none">&gt;</span>
+                    <span className="text-[#6b7280] select-none">{cwd} &gt;</span>
                     <span className="font-bold select-text">{item.cmd}</span>
                   </div>
                   {/* Per-command quick copy button */}

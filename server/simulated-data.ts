@@ -78,7 +78,7 @@ Node: kmct-core-gateway-01
 Timestamp: 03:35:12 UTC
 Target Account: sec_officer
 Status: Account temporarily locked after 5 invalid passphrase submissions.
-Password hash dumped to quarantine database: 8b067cfd720a4b08dc0ec66d9539420067bd686fa7fcf2e9e6ca3a0ec3f3565e
+Password hash dumped to quarantine database: 519a208f99a0d56d7fb1d8b8a7a2ee1cde943b768397dc918e36858af31299a1
 
 Please contact system administrators to reset your token.`,
   },
@@ -116,11 +116,38 @@ INITIAL FINDINGS:
         type: 'file',
         size: '512B',
         permissions: '-rw-------',
-        content: `SWAP HEAP CARVE [0x7FFF0010 - 0x7FFF0090]:
-NEURAL_LAYER_04:
-[W0: 0.884] [W1: -0.192] [W2: 0.941] [W3: 0.612]
-ACTIVATION: LEAKY_RELU
-KERNEL IDENTITY TAG: ASTRA{neural_weight_layer_breached}`,
+        content: `CORE MEMORY CARVE // 4 CANDIDATE LAYERS
+LAYER_A
+STATE: BOOT_SYNC
+PARENT: cold-storage-0
+WEIGHTS: 13,22,09,31
+CHECKSUM: 13593474
+PAYLOAD: ZGVjb3lfc2VjdG9yX2E=
+CORE_FRAGMENT: ----
+
+LAYER_B
+STATE: ADAPTIVE
+PARENT: relay-shadow-01
+WEIGHTS: 04,18,27,11
+CHECKSUM: 01eac2bd
+PAYLOAD: ZGVjb3lfc2VjdG9yX2I=
+CORE_FRAGMENT: ----
+
+LAYER_C
+STATE: CORE_WAKE
+PARENT: core-uplink.echo.internal
+WEIGHTS: 17,05,29,13
+CHECKSUM: 6bab7eb1
+PAYLOAD: fWRlaGNhZXJiX3JleWFsX3RoZ2lld19sYXJ1ZW57QVJUU0E=
+CORE_FRAGMENT: 9A7C
+
+LAYER_D
+STATE: FAILSAFE
+PARENT: echo-mirror-02
+WEIGHTS: 22,08,14,03
+CHECKSUM: 1491e2d4
+PAYLOAD: ZGVjb3lfc2VjdG9yX2Q=
+CORE_FRAGMENT: ----` ,
       },
       {
         name: 'backup.zip.meta',
@@ -254,19 +281,47 @@ VIRTUAL_SIZE: 134217728 bytes`,
             permissions: '-rw-r--r--',
             content: `; ASTRA VIRTUAL MACHINE DISASSEMBLY (v2.6)
 ; ENTRY: _verify_token
+; INPUT: 9-byte operator token
 0000: LOAD_R0 [INPUT_PTR]
-0004: XOR_R0  0x5A
-0008: CMP_R0  0x1B
-000C: JNE     _fail_branch
-0010: LOAD_R1 [INPUT_PTR+1]
-0014: ADD_R1  0x07
-0018: CMP_R1  0x5A
-...
-; VERIFIED SUCCESS RESULT:
-; ALL 36 BYTES MATCHED
-FLAG = ASTRA{virtual_opcodes_disassembled}`,
+0004: XOR_R0  0x37
+0008: ADD_R0  0x11
+000C: ROL_R0  1
+0010: CMP_R0  [EXPECTED_PTR]
+0014: JNE     _fail_branch
+0018: INC_PTR
+001C: DEC_COUNT
+0020: JNZ     0000
+0024: JMP     _success
+
+EXPECTED_BYTES: E4 17 56 13 EC 0F 0B 19 07
+REVERSE_ORDER: ROR 1 -> SUB 0x11 -> XOR 0x37
+SUCCESS FRAGMENT: ORBIT-17` ,
           },
         ],
+      },
+    ],
+  },
+  {
+    name: 'wordlists',
+    path: '/wordlists',
+    type: 'dir',
+    size: '4.0K',
+    permissions: 'drwxr-xr-x',
+    children: [
+      {
+        name: 'campus.txt',
+        path: '/wordlists/campus.txt',
+        type: 'file',
+        size: '128B',
+        permissions: '-rw-r--r--',
+        content: `kmct2026
+cyberstorm2026!
+coral-echo
+semester2026
+blue-lotus
+quarantine42
+indra2026
+nightshift`,
       },
     ],
   },
@@ -346,9 +401,9 @@ export const SIMULATED_PACKETS: SimulatedPacket[] = [
     destIp: '10.240.4.88',
     protocol: 'TLS',
     length: 1420,
-    info: 'TLSv1.3 Application Data [Session Ticket: ASTRA{honeypot_evaded_covert_8443}]',
-    payloadHex: '170303058041535452417b686f6e6579706f745f6576616465645f636f766572745f383434337d',
-    payloadAscii: 'ASTRA{honeypot_evaded_covert_8443}',
+    info: 'TLSv1.3 Application Data [Session Ticket: SESSION_TAG=QUAD-8443]',
+    payloadHex: '170303000a515541442d38343433',
+    payloadAscii: 'SESSION_TAG=QUAD-8443',
   },
   {
     frameNumber: 130,

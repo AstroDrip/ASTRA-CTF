@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Shield, Radio, Volume2, VolumeX, Sparkles, User, Terminal, FolderLock, Clock, Trophy, Settings } from 'lucide-react';
+import { Shield, Radio, Volume2, VolumeX, Sparkles, User, Terminal, FolderLock, Clock, Trophy } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const { 
@@ -14,7 +14,8 @@ export const Header: React.FC = () => {
     openAuthModal, 
     logout,
     evidence,
-    openSimulatedTool
+    openSimulatedTool,
+    liveSyncAt
   } = useApp();
 
   return (
@@ -120,18 +121,6 @@ export const Header: React.FC = () => {
               <span>BADGES</span>
             </button>
 
-            <button
-              id="nav-admin-btn"
-              onClick={() => setActiveView('admin')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 font-mono text-xs tracking-wider transition-colors ${
-                activeView === 'admin'
-                  ? 'border-b-2 border-[#ccff00] text-[#ccff00]'
-                  : 'text-[#9ca3af] hover:text-[#f3f4f6]'
-              }`}
-            >
-              <Settings className="h-3.5 w-3.5" />
-              <span>ADMIN</span>
-            </button>
           </nav>
         </div>
 
@@ -176,6 +165,7 @@ export const Header: React.FC = () => {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ccff00]" />
             </span>
             <span className="tracking-wider text-xs">ONLINE</span>
+            {team && <span className="text-[9px] text-[#6b7280]">SYNC {liveSyncAt ? 'LIVE' : '...'}</span>}
           </div>
 
           {/* Team / Auth Badge */}
@@ -191,16 +181,17 @@ export const Header: React.FC = () => {
                   <span className="text-[#9ca3af]">|</span>
                   <span className="font-bold text-white">{team.score} PTS</span>
                   <span className="hidden text-[10px] text-[#00f0ff] sm:inline">[{team.echoState}]</span>
+                  <span className="hidden text-[10px] text-[#9ca3af] md:inline">[{team.activePlayerCount || 1}/2]</span>
                 </div>
               </div>
 
               <button
                 id="header-logout-btn"
                 onClick={logout}
-                title="Logout"
+                title="Log out of this team"
                 className="border border-[#1b2129] bg-[#0e1217] px-2 py-1 font-mono text-[11px] text-[#9ca3af] hover:text-white"
               >
-                EXIT
+                LOG OUT
               </button>
             </div>
           ) : (
@@ -242,12 +233,6 @@ export const Header: React.FC = () => {
             className={`px-2 py-1 ${activeView === 'scoreboard' ? 'text-[#ccff00] font-bold' : 'text-gray-400'}`}
           >
             SCORES
-          </button>
-          <button 
-            onClick={() => setActiveView('admin')}
-            className={`px-2 py-1 ${activeView === 'admin' ? 'text-[#ccff00] font-bold' : 'text-gray-400'}`}
-          >
-            ADMIN
           </button>
         </div>
       </div>

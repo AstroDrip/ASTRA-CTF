@@ -48,20 +48,22 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <div className="relative min-h-screen bg-[#07090b] text-[#f3f4f6] selection:bg-[#ccff00] selection:text-black flex flex-col font-sans overflow-x-hidden">
-        {/* Procedural Particle & Cyber Perspective Grid */}
-        <ParticleBackground />
+      <ApplicationFrame />
+    </AppProvider>
+  );
+}
 
-        {/* Dynamic System Notice & Configuration Banner */}
-        <SystemNoticeBanner />
+const ApplicationFrame: React.FC = () => {
+  const { activeView } = useApp();
+  const isAdminRoute = activeView === 'admin';
 
-        {/* Global Operational HUD Header */}
-        <Header />
-
-        {/* Dynamic Views */}
-        <MainContent />
-
-        {/* Footer info strip */}
+  return (
+    <div className="relative min-h-screen bg-[#07090b] text-[#f3f4f6] selection:bg-[#ccff00] selection:text-black flex flex-col font-sans overflow-x-hidden">
+      <ParticleBackground />
+      {!isAdminRoute && <SystemNoticeBanner />}
+      {!isAdminRoute && <Header />}
+      <MainContent />
+      {!isAdminRoute && (
         <footer className="relative z-10 border-t border-[#1b2129] bg-[#07090b] px-4 py-4 font-mono text-[11px] text-[#6b7280]">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
@@ -77,7 +79,7 @@ export default function App() {
             </div>
           </div>
         </footer>
-      </div>
-    </AppProvider>
+      )}
+    </div>
   );
-}
+};

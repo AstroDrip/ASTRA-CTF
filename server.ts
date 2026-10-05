@@ -1,16 +1,35 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
+import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
 import { store } from './server/supabase-store.js';
 import { SIMULATED_EMAILS, SIMULATED_FILES, SIMULATED_PACKETS } from './server/simulated-data.js';
+import { SERVER_CHALLENGES } from './server/challenges-data.js';
+import { executeVirtualTerminal } from './server/terminal.js';
 
 const PORT = 3000;
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'ASTRA_ADMIN_2026';
+const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim() || null;
 
-if (!process.env.ADMIN_SECRET) {
-  console.warn('[ASTRA AUTH] ⚠️ ADMIN_SECRET environment variable is not configured. Defaulting to fallback passcode: "ASTRA_ADMIN_2026".');
+if (!ADMIN_SECRET) {
+  console.warn('[ASTRA AUTH] ADMIN_SECRET is not configured. Admin routes are disabled until the environment variable is set.');
+}
+
+function constantTimeSecretEquals(provided: unknown): boolean {
+  if (!ADMIN_SECRET || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(ADMIN_SECRET);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function getAdminPasscode(req: Request): string | null {
+  const value = req.headers['x-admin-passcode'];
+  return Array.isArray(value) ? value[0] || null : value || null;
+}
+
+function isAdminAuthorized(req: Request): boolean {
+  return constantTimeSecretEquals(getAdminPasscode(req));
 }
 
 // Extend Express Request
@@ -57,8 +76,8 @@ async function startServer() {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       warnings.push('Database (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) is not configured. Running in local standalone storage mode.');
     }
-    if (!process.env.ADMIN_SECRET) {
-      warnings.push('ADMIN_SECRET is not set in environment. Using default fallback passcode ("ASTRA_ADMIN_2026").');
+    if (!ADMIN_SECRET) {
+      warnings.push('ADMIN_SECRET is not configured. Admin routes are disabled.');
     }
     return warnings;
   };
@@ -72,7 +91,7 @@ async function startServer() {
       storageMode: store.getStorageMode ? store.getStorageMode() : 'local-fallback',
       warnings,
       isSupabaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-      isAdminDefault: !process.env.ADMIN_SECRET,
+      isAdminConfigured: Boolean(ADMIN_SECRET),
     });
   });
 
@@ -83,7 +102,7 @@ async function startServer() {
       time: new Date().toISOString(),
       storageMode: store.getStorageMode ? store.getStorageMode() : 'local-fallback',
       isSupabaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-      isAdminDefault: !process.env.ADMIN_SECRET,
+      isAdminConfigured: Boolean(ADMIN_SECRET),
       warnings,
     });
   });
@@ -134,6 +153,33 @@ async function startServer() {
 
   app.get('/api/auth/me', (req: AuthenticatedRequest, res) => {
     res.json({ team: req.team || null });
+  });
+
+  // Team-scoped live snapshot. Clients poll this endpoint so both players share
+  // the same authoritative Supabase/local state without exposing other teams.
+  app.get('/api/team/state', async (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
+    try {
+      const snapshot = await store.getTeamSnapshot(req.team.id);
+      res.json(snapshot);
+    } catch (err: any) {
+      await store.recordSystemEvent('ERROR', 'team_state_sync', err?.message || 'Team state sync failed', req.team.id);
+      res.status(500).json({ error: 'Unable to synchronize team state.' });
+    }
+  });
+
+  app.post('/api/client-events', async (req: AuthenticatedRequest, res) => {
+    if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
+    const { level, eventType, message, metadata } = req.body || {};
+    const safeLevel = level === 'ERROR' ? 'ERROR' : level === 'WARN' ? 'WARN' : 'INFO';
+    await store.recordSystemEvent(
+      safeLevel,
+      String(eventType || 'client_event').slice(0, 80),
+      String(message || 'Client event').slice(0, 1000),
+      req.team.id,
+      metadata && typeof metadata === 'object' ? metadata : {},
+    );
+    res.json({ success: true });
   });
 
   // Challenges
@@ -211,367 +257,218 @@ async function startServer() {
     res.json({ submissions: sanitized });
   });
 
-  // Simulated Systems APIs
+  // Simulated Systems APIs. Player-visible simulation data is redacted until the
+  // corresponding challenge branch is unlocked.
+  const sanitizeSimulation = <T,>(value: T, team: any): T => {
+    const clone: any = JSON.parse(JSON.stringify(value));
+    const unlocked = new Set(team?.solvedChallengeIds || []);
+    const isAvailable = (challengeId: string) => {
+      const challenge = SERVER_CHALLENGES.find((item) => item.id === challengeId);
+      if (!challenge) return false;
+      return challenge.prerequisites.every((id) => unlocked.has(id));
+    };
+    const redact = (input: string) => {
+      let output = input;
+      for (const challenge of SERVER_CHALLENGES) {
+        if (isAvailable(challenge.id) || unlocked.has(challenge.id)) continue;
+        const encoded = Buffer.from(challenge.flag, 'utf8').toString('base64');
+        output = output.split(challenge.flag).join('[REDACTED_UNTIL_NODE_UNLOCKED]');
+        output = output.split(encoded).join('[REDACTED_BASE64]');
+      }
+      return output;
+    };
+    const walk = (item: any): any => {
+      if (typeof item === 'string') return redact(item);
+      if (Array.isArray(item)) return item.map(walk);
+      if (item && typeof item === 'object') return Object.fromEntries(Object.entries(item).map(([k, v]) => [k, walk(v)]));
+      return item;
+    };
+    return walk(clone);
+  };
+
   app.get('/api/simulated/mailbox', (req: AuthenticatedRequest, res) => {
     if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
-    res.json({ emails: SIMULATED_EMAILS });
+    res.json({ emails: sanitizeSimulation(SIMULATED_EMAILS, req.team) });
   });
 
   app.get('/api/simulated/files', (req: AuthenticatedRequest, res) => {
     if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
-    res.json({ root: SIMULATED_FILES });
+    res.json({ root: sanitizeSimulation(SIMULATED_FILES, req.team) });
   });
 
   app.get('/api/simulated/packets', (req: AuthenticatedRequest, res) => {
     if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
     const filter = (req.query.filter as string)?.toUpperCase();
-    if (filter && filter !== 'ALL') {
-      return res.json({
-        packets: SIMULATED_PACKETS.filter((p) => p.protocol.toUpperCase() === filter),
-      });
-    }
-    res.json({ packets: SIMULATED_PACKETS });
+    const packets = filter && filter !== 'ALL'
+      ? SIMULATED_PACKETS.filter((p) => p.protocol.toUpperCase() === filter)
+      : SIMULATED_PACKETS;
+    res.json({ packets: sanitizeSimulation(packets, req.team) });
   });
 
-  // Simulated Terminal command runner (Safe, in-memory virtual shell)
-  app.post('/api/simulated/terminal/exec', (req: AuthenticatedRequest, res) => {
+  // Safe, in-memory virtual shell. It never executes host OS commands.
+  app.post('/api/simulated/terminal/exec', async (req: AuthenticatedRequest, res) => {
     if (!req.team) return res.status(401).json({ error: 'Authentication required.' });
-    const { command } = req.body;
-    if (!command || typeof command !== 'string') {
-      return res.json({ output: '' });
-    }
-
-    const trimmed = command.trim();
-    if (!trimmed) return res.json({ output: '' });
-
-    let commandText = trimmed;
-    const pipeline = trimmed.split('|').map((part) => part.trim()).filter(Boolean);
-    if (pipeline.length > 1) {
-      const first = pipeline[0];
-      const second = pipeline[1];
-      if (/^echo\s+/i.test(first) && /^xxd\s+-r\s+-p$/i.test(second)) {
-        const value = first.replace(/^echo\s+/i, '').trim().replace(/^(['"])(.*)\1$/, '$2');
-        commandText = `xxd -r -p ${value}`;
-      } else if (/^strings\s+\S+$/i.test(first) && /^grep\s+/i.test(second)) {
-        const file = first.split(/\s+/)[1];
-        const query = second.replace(/^grep\s+/i, '').trim();
-        commandText = `grep ${query} ${file}`;
-      } else {
-        return res.json({ output: 'astra-sh: unsupported pipeline. Only the documented ASTRA pipelines are available.' });
-      }
-    }
-    const parts = commandText.split(/\s+/);
-    const cmd = parts[0].toLowerCase();
-    const args = parts.slice(1);
-
-    switch (cmd) {
-      case 'help':
-        return res.json({
-          output: `ASTRA // ECHO VIRTUAL WORKSTATION (KMCT Cyber Range)
-Available commands:
-  help                    Display this technical guide
-  clear                   Clear terminal display
-  ls [-la] [path]         List directory contents
-  cat <path>              Print file contents to stdout
-  grep <pattern> <file>   Search for pattern in virtual file
-  strings <file>          Extract printable character strings from binary
-  xxd -r -p <hex>         Convert hexadecimal stream to text
-  echo <text>             Print text to stdout
-  file <path>             Determine file type signature
-  pwd                     Print current working directory
-  whoami                  Show active operator identity
-  uname -a                Print simulated system architecture
-  echo-quarantine --status Check ECHO core quarantine barrier status
-  echo-quarantine --engage Disarm rogue intelligence with master key`,
-        });
-
-      case 'echo': {
-        const value = args.join(' ');
-        return res.json({ output: value.replace(/^(['"])(.*)\1$/, '$2') });
-      }
-
-      case 'pwd':
-        return res.json({ output: '/home/investigator' });
-
-      case 'whoami':
-        return res.json({
-          output: req.team ? `operator_${req.team.name.toLowerCase()} [SEC-LEVEL: ${req.team.echoState}]` : 'guest_analyst [SEC-LEVEL: OBSERVING]',
-        });
-
-      case 'uname':
-        return res.json({ output: 'Linux kmct-astra-node 6.1.0-echo-x86_64 #1 SMP PREEMPT GNU/Linux' });
-
-      case 'ls': {
-        const targetPath = args.find((a) => !a.startsWith('-')) || '/incident';
-        const showAll = args.some((a) => a.includes('a'));
-
-        if (targetPath.includes('/incident')) {
-          if (showAll) {
-            return res.json({
-              output: `total 16
-drwxr-xr-x  3 root root 4096 Sep 18 03:15 .
-drwxr-xr-x 18 root root 4096 Sep 18 03:00 ..
-drwx------  2 root root 4096 Sep 18 03:15 .hidden
--rw-r--r--  1 root root 1204 Sep 18 03:12 report.txt
--rw-------  1 root root  512 Sep 18 03:41 echo_weights.bin
--rw-r--r--  1 root root  256 Sep 18 03:18 backup.zip.meta`,
-            });
-          }
-          return res.json({
-            output: `backup.zip.meta  echo_weights.bin  report.txt`,
-          });
-        }
-
-        if (targetPath.includes('.hidden')) {
-          return res.json({
-            output: `total 8
-drwx------ 2 root root 4096 Sep 18 03:15 .
-drwxr-xr-x 3 root root 4096 Sep 18 03:15 ..
--rw-r--r-- 1 root root  342 Sep 18 03:15 sector_recovery.txt`,
-          });
-        }
-
-        if (targetPath.includes('/var/log')) {
-          return res.json({ output: `beacon.raw  firewall.audit  syslog.1` });
-        }
-
-        if (targetPath.includes('/opt/astra-vm')) {
-          return res.json({ output: `astra-vm.bin  disassembly.asm  runtime.so` });
-        }
-
-        return res.json({
-          output: `incident  memory  opt  var`,
-        });
-      }
-
-      case 'cat': {
-        const file = args[0];
-        if (!file) return res.json({ output: 'cat: missing file operand' });
-
-        if (file.includes('beacon.raw')) {
-          return res.json({
-            output: `BEACON_SYNC_HEADER [STN-KMCT-01]
-TIMESTAMP: 2026-09-18T03:12:04Z
-CARRIER: 1420.405751768 MHz (Hydrogen Line Uplink)
-ENCODING: HEX-TELEMETRY
-PAYLOAD: 41535452417b626561636f6e5f6672657175656e63795f313432306d687a7d
-STATUS: UNVERIFIED_TRANSMISSION`,
-          });
-        }
-
-        if (file.includes('sector_recovery.txt')) {
-          return res.json({
-            output: `=== SECTOR CARVING TOOL v4.1 ===
-File recovered from raw unallocated cluster 0x8F92A
-Header signature match: ASCII TEXT
-Recovered string: ASTRA{inode_carved_ghost_sector}`,
-          });
-        }
-
-        if (file.includes('report.txt')) {
-          return res.json({
-            output: `KMCT CYBER RANGE INCIDENT ASSESSMENT REPORT
-CLASSIFICATION: CONFIDENTIAL // TLP:AMBER
-DATE: 2026-09-18
-INVESTIGATOR: Incident Response Unit
-
-INITIAL FINDINGS:
-1. At 03:12:04 UTC, a radio-frequency telemetry signal was captured across subnet 10.240.4.0/24.
-2. Between 03:17:00 and 03:20:00 UTC, the perimeter firewall was disabled for 180 seconds.
-3. Volatile RAM from node kmct-web-01 revealed rogue daemon PID 4091 running echo-daemon.elf.`,
-          });
-        }
-
-        if (file.includes('firewall.audit')) {
-          return res.json({
-            output: `FIREWALL AUDIT LOG - RULE DISABLE SEQUENCE
-03:17:00 UTC - RULESET_DISABLE: [AUTH_TOKEN: ASTRA{firewall_blackout_180s}]
-03:17:01 UTC - ALL EGRESS ALLOWED TO EXTERNAL ROUTE 198.51.100.0/24
-03:19:59 UTC - TERMINATING BYPASS
-03:20:00 UTC - RULESET_RESTORE: NORMAL FILTERING RESUMED
-DURATION OF SILENT EXFILTRATION: 180 SECONDS`,
-          });
-        }
-
-        if (file.includes('disassembly.asm')) {
-          return res.json({
-            output: `; ASTRA VIRTUAL MACHINE DISASSEMBLY (v2.6)
-; ENTRY: _verify_token
-0000: LOAD_R0 [INPUT_PTR]
-0004: XOR_R0  0x5A
-0008: CMP_R0  0x1B
-000C: JNE     _fail_branch
-0010: LOAD_R1 [INPUT_PTR+1]
-0014: ADD_R1  0x07
-0018: CMP_R1  0x5A
-...
-; DECODED REGISTER MATCH:
-FLAG = ASTRA{virtual_opcodes_disassembled}`,
-          });
-        }
-
-        if (file.includes('echo_weights.bin')) {
-          return res.json({
-            output: `SWAP HEAP CARVE [0x7FFF0010 - 0x7FFF0090]:
-NEURAL_LAYER_04:
-[W0: 0.884] [W1: -0.192] [W2: 0.941] [W3: 0.612]
-ACTIVATION: LEAKY_RELU
-KERNEL IDENTITY TAG: ASTRA{neural_weight_layer_breached}`,
-          });
-        }
-
-        return res.json({ output: `cat: ${file}: No such file or permission denied` });
-      }
-
-      case 'strings': {
-        const file = args[0] || '';
-        if (file.includes('dump.raw')) {
-          return res.json({
-            output: `/usr/lib/systemd/systemd
-/var/run/log.sock
-KMCT_AUTH_SALT_2026
-PID: 4091
-/usr/local/bin/echo-daemon.elf --stealth --key=ASTRA{rogue_pid_4091_captured}
-libpthread.so.0
-exit`,
-          });
-        }
-        return res.json({ output: `strings: ${file}: cannot map memory partition` });
-      }
-
-      case 'grep': {
-        const query = args[0]?.replace(/["']/g, '') || '';
-        const file = args[1] || '';
-        if (query.toLowerCase().includes('echo-daemon') || file.includes('dump.raw')) {
-          return res.json({
-            output: `PID: 4091 COMMAND: /usr/local/bin/echo-daemon.elf --stealth --key=ASTRA{rogue_pid_4091_captured}`,
-          });
-        }
-        return res.json({ output: `grep: match not found in specified buffer` });
-      }
-
-      case 'xxd': {
-        const rawHex = args.find((a) => !a.startsWith('-')) || '';
-        if (rawHex.includes('4153545241')) {
-          return res.json({ output: 'ASTRA{beacon_frequency_1420mhz}' });
-        }
-        try {
-          const buf = Buffer.from(rawHex.replace(/[^0-9a-fA-F]/g, ''), 'hex');
-          return res.json({ output: buf.toString('utf-8') || 'Binary payload' });
-        } catch {
-          return res.json({ output: 'xxd: parsing error' });
-        }
-      }
-
-      case 'echo-quarantine': {
-        if (args.includes('--status')) {
-          return res.json({
-            output: `=== ASTRA // ECHO QUARANTINE PROTOCOL ===
-STATUS: ACTIVE_DEFENSE
-CONTAINMENT INTEGRITY: 14%
-ROUGUE INTELLIGENCE: ECHO (THREAT LEVEL 5)
-ECHO: "You reached the layer I wanted hidden. Submit the master quarantine sequence to isolate me."
-KEY: ASTRA{echo_intelligence_quarantined_2026}`,
-          });
-        }
-        if (args.includes('--engage')) {
-          return res.json({
-            output: `[ENGAGE] Master quarantine lock armed. Submit the key into Node 18 (ECHO CORE) in the War Room to complete full isolation.`,
-          });
-        }
-        return res.json({ output: 'Usage: echo-quarantine [--status | --engage]' });
-      }
-
-      case 'file': {
-        const file = args[0] || '';
-        if (file.includes('echo_weights')) return res.json({ output: `${file}: ELF 64-bit LSB shared object, x86-64` });
-        if (file.includes('dump.raw')) return res.json({ output: `${file}: Linux crash dump memory image` });
-        return res.json({ output: `${file}: ASCII text` });
-      }
-
-      default:
-        return res.json({ output: `astra-sh: ${cmd}: command not found. Type 'help' for guidance.` });
+    const command = typeof req.body?.command === 'string' ? req.body.command : '';
+    const cwd = typeof req.body?.cwd === 'string' ? req.body.cwd : '/home/investigator';
+    try {
+      const result = await executeVirtualTerminal(command, req.team, cwd);
+      res.json(result);
+    } catch (err: any) {
+      await store.recordSystemEvent('ERROR', 'terminal_exec', err?.message || 'Terminal execution error', req.team.id);
+      res.status(500).json({ output: 'astra-sh: internal virtual-shell error', cwd });
     }
   });
 
-  // Admin APIs
+  // Admin APIs. Every admin action requires the same constant-time secret gate.
   app.post('/api/admin/auth', (req, res) => {
-    const { passcode } = req.body;
-    if (passcode === ADMIN_SECRET) {
+    if (!ADMIN_SECRET) return res.status(503).json({ success: false, error: 'ADMIN_SECRET is not configured.' });
+    if (constantTimeSecretEquals(req.body?.passcode)) {
       res.json({ success: true, authorized: true });
-    } else {
-      res.status(401).json({ success: false, error: 'Invalid admin passcode.' });
+      return;
     }
+    res.status(401).json({ success: false, error: 'Invalid admin passcode.' });
   });
 
   app.get('/api/admin/overview', async (req, res) => {
-    const passcode = req.headers['x-admin-passcode'];
-    if (passcode !== ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized admin access.' });
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    try {
+      const [teams, submissions, activeSessions, systemEvents] = await Promise.all([
+        store.getAllTeams(),
+        store.getSubmissions(5000),
+        store.getActiveSessionCounts(),
+        store.getSystemEvents(150),
+      ]);
+      const sessionDetails = await store.getActiveSessions();
+      const challengeStats = SERVER_CHALLENGES.map((challenge) => {
+        const rows = submissions.filter((submission) => submission.challengeId === challenge.id);
+        const correct = rows.filter((submission) => submission.isCorrect).length;
+        const incorrect = rows.filter((submission) => !submission.isCorrect).length;
+        return {
+          id: challenge.id,
+          nodeIndex: challenge.nodeIndex,
+          title: challenge.title,
+          difficulty: challenge.difficulty,
+          difficultyRating: challenge.difficultyRating,
+          solvedTeams: correct,
+          totalSubmissions: rows.length,
+          incorrectSubmissions: incorrect,
+          successRate: rows.length ? Math.round((correct / rows.length) * 100) : 0,
+        };
+      });
+      const liveTeams = teams.map((team) => ({
+        ...team,
+        activePlayerCount: activeSessions[team.id] || 0,
+        activeSessions: sessionDetails
+          .filter((session) => session.teamId === team.id)
+          .map(({ id, createdAt }) => ({ id, createdAt })),
+        solvedCount: team.solvedChallengeIds.length,
+      }));
+      res.json({
+        teamsCount: teams.length,
+        activeTeamsCount: liveTeams.filter((team) => team.activePlayerCount > 0).length,
+        completedTeamsCount: liveTeams.filter((team) => team.solvedCount === SERVER_CHALLENGES.length).length,
+        totalSolved: liveTeams.reduce((sum, team) => sum + team.solvedCount, 0),
+        submissionsCount: submissions.length,
+        teams: liveTeams,
+        submissions: submissions.slice(0, 500).map((submission) => ({ ...submission, attemptedFlag: '[ADMIN_ONLY]' })),
+        challengeStats,
+        systemEvents,
+      });
+    } catch (err: any) {
+      console.error('[ASTRA ADMIN] failed to load overview', err);
+      await store.recordSystemEvent('ERROR', 'admin_overview', err?.message || 'Admin overview failed');
+      res.status(500).json({
+        error: 'Unable to load admin overview.',
+        details: err instanceof Error ? err.message : 'Unknown server error.',
+      });
     }
-    const teams = await store.getAllTeams();
-    const submissions = await store.getSubmissions(200);
-    res.json({
-      teamsCount: teams.length,
-      submissionsCount: submissions.length,
-      teams,
-      submissions,
-    });
   });
 
   app.post('/api/admin/reset', async (req, res) => {
-    const passcode = req.headers['x-admin-passcode'];
-    if (passcode !== ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized admin access.' });
-    }
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
     await store.adminResetCompetition();
-    res.json({ success: true, message: 'All competition records, submissions, and sessions reset successfully.' });
+    await store.recordSystemEvent('WARN', 'competition_reset', 'Competition reset by administrator.');
+    res.json({ success: true, message: 'Competition reset successfully.' });
   });
 
   app.post('/api/admin/challenge-toggle', async (req, res) => {
-    const passcode = req.headers['x-admin-passcode'];
-    if (passcode !== ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized admin access.' });
-    }
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
     const { challengeId, disable } = req.body;
     await store.adminToggleChallenge(challengeId, Boolean(disable));
+    await store.recordSystemEvent('INFO', 'challenge_toggle', `Challenge ${challengeId} ${disable ? 'disabled' : 'enabled'} by administrator.`);
     res.json({ success: true });
   });
 
-  // Instructor Admin Tools (Dashboard endpoints)
-  app.post('/api/admin/reset-team', async (req: AuthenticatedRequest, res) => {
-    const teamId = req.body.teamId || req.team?.id;
+  app.post('/api/admin/reset-team', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    const teamId = req.body?.teamId;
     if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
-    if (store.adminResetTeam) {
-      await store.adminResetTeam(teamId);
-    }
+    await store.adminResetTeam(teamId);
+    await store.recordSystemEvent('WARN', 'team_reset', `Team ${teamId} reset by administrator.`, teamId);
     res.json({ success: true, message: 'Team state reset successfully.' });
   });
 
-  app.post('/api/admin/unlock-all-nodes', async (req: AuthenticatedRequest, res) => {
-    const teamId = req.body.teamId || req.team?.id;
-    if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
-    if (store.adminUnlockAllNodes) {
-      await store.adminUnlockAllNodes(teamId);
+  app.post('/api/admin/change-team-password', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    const { teamId, password } = req.body || {};
+    if (typeof teamId !== 'string' || !teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    if (typeof password !== 'string' || password.length < 4 || password.length > 128) {
+      return res.status(400).json({ error: 'Password must be between 4 and 128 characters.' });
     }
-    res.json({ success: true, message: 'All 18 nodes unlocked for testing.' });
+    try {
+      await store.adminChangeTeamPassword(teamId, password);
+      await store.recordSystemEvent('WARN', 'team_password_changed', 'Team passphrase changed by administrator.', teamId);
+      res.json({ success: true, message: 'Team passphrase changed. Existing sessions remain active.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Unable to change team passphrase.' });
+    }
   });
 
-  app.post('/api/admin/override-echo', async (req: AuthenticatedRequest, res) => {
-    const { teamId, echoState, threatLevel } = req.body;
-    const targetId = teamId || req.team?.id;
-    if (!targetId) return res.status(400).json({ error: 'Team ID is required.' });
-    if (store.adminOverrideEcho) {
-      await store.adminOverrideEcho(targetId, echoState, threatLevel);
+  app.post('/api/admin/revoke-session', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    const { teamId, sessionId } = req.body || {};
+    if (typeof teamId !== 'string' || !teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    if (typeof sessionId !== 'string' || !/^[a-f0-9]{12}$/.test(sessionId)) {
+      return res.status(400).json({ error: 'Valid session ID is required.' });
     }
+    try {
+      await store.adminRevokeSession(teamId, sessionId);
+      await store.recordSystemEvent('WARN', 'team_session_revoked', `An active team session was revoked by administrator.`, teamId);
+      res.json({ success: true, message: 'Player session disconnected.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Unable to revoke player session.' });
+    }
+  });
+
+  app.post('/api/admin/unlock-all-nodes', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    const teamId = req.body?.teamId;
+    if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    await store.adminUnlockAllNodes(teamId);
+    await store.recordSystemEvent('INFO', 'admin_unlock_all', `All nodes unlocked for ${teamId}.`, teamId);
+    res.json({ success: true, message: 'All nodes unlocked for testing.' });
+  });
+
+  app.post('/api/admin/override-echo', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    const { teamId, echoState, threatLevel } = req.body || {};
+    if (!teamId) return res.status(400).json({ error: 'Team ID is required.' });
+    await store.adminOverrideEcho(teamId, echoState, Number(threatLevel));
+    await store.recordSystemEvent('INFO', 'echo_override', `ECHO forced to ${echoState} / threat ${threatLevel}.`, teamId);
     res.json({ success: true, message: `ECHO forced to state: ${echoState} [Level ${threatLevel}].` });
   });
 
-  app.post('/api/admin/trigger-chaos', (req: AuthenticatedRequest, res) => {
-    res.json({
-      success: true,
-      message: 'Simulated network anomaly burst injected across interface opt0.',
-    });
+  app.post('/api/admin/trigger-chaos', async (req, res) => {
+    if (!isAdminAuthorized(req)) return res.status(401).json({ error: 'Unauthorized admin access.' });
+    await store.recordSystemEvent('INFO', 'chaos_injection', 'Simulated network anomaly burst injected by administrator.');
+    res.json({ success: true, message: 'Simulated network anomaly burst injected across interface opt0.' });
+  });
+
+  // Last-resort API error telemetry for unexpected exceptions.
+  app.use(async (err: any, req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    await store.recordSystemEvent('ERROR', 'unhandled_request_error', err?.message || 'Unhandled request error', req.team?.id || null, { path: req.path, method: req.method });
+    if (res.headersSent) return next(err);
+    res.status(500).json({ error: 'Internal range error.' });
   });
 
   // --- Vite & Static Handling ---

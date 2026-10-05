@@ -26,6 +26,7 @@ export interface Challenge {
   title: string;
   category: ChallengeCategory;
   difficulty: ChallengeDifficulty;
+  difficultyRating: number;
   points: number;
   story: string;
   investigationMaterial: {
@@ -97,6 +98,7 @@ export interface Team {
   evidenceIds: string[];
   createdAt: string;
   isAdmin?: boolean;
+  activePlayerCount?: number;
 }
 
 export interface LeaderboardEntry {
@@ -108,6 +110,17 @@ export interface LeaderboardEntry {
   lastSolveAt: string | null;
   echoState: EchoStateType;
   threatLevel: number;
+}
+
+
+export interface SystemEvent {
+  id: string;
+  level: 'INFO' | 'WARN' | 'ERROR';
+  eventType: string;
+  message: string;
+  teamId?: string | null;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SubmissionRecord {

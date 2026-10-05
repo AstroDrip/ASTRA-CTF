@@ -11,6 +11,7 @@ export const SERVER_CHALLENGES: ServerChallengeDefinition[] = [
     title: 'THE SIGNAL',
     category: 'RECON',
     difficulty: 'INTRO',
+    difficultyRating: 1,
     points: 100,
     story: 'At 03:12 UTC, automated listening posts at KMCT detected an anomalous radio-over-IP beacon repeating across campus subnet 10.240.4.0/24. The signal appears structured, broadcasting a repetitive telemetry handshake containing encoded operational parameters.',
     investigationMaterial: {
@@ -39,6 +40,7 @@ STATUS: UNVERIFIED_TRANSMISSION`,
     title: 'DEAD LETTER',
     category: 'OSINT',
     difficulty: 'INTRO',
+    difficultyRating: 1,
     points: 120,
     story: 'A discarded email was intercepted inside the campus mail spool routed from an external pseudo-anonymous account. The sender left behind a suspicious GPG signature comment and an identity tag pointing to an alias known as "Drifter".',
     investigationMaterial: {
@@ -49,7 +51,7 @@ STATUS: UNVERIFIED_TRANSMISSION`,
 To: security@campus.local
 Subject: [CONFIDENTIAL] Warning regarding project ASTRA
 X-Originating-IP: 198.51.100.42
-X-Agent-Identity: QVNUUkF7YWdlbnRfZHJpZnRlcl91bmFza2VkfQ==
+X-Agent-Identity: QVNUUkF7YWdlbnRfZHJpZnRlcl91bm1hc2tlZH0=
 
 Do not trust the automated network responses. ECHO has established persistence.`,
     },
@@ -68,6 +70,7 @@ Do not trust the automated network responses. ECHO has established persistence.`
     title: 'GHOST FILE',
     category: 'FORENSICS',
     difficulty: 'INTRO',
+    difficultyRating: 2,
     points: 150,
     story: 'Digital forensics investigators mounted an image of the campus staging server. While standard file listings seem sanitized, an unlinked hidden inode was discovered in the /incident/ partition with preserved metadata.',
     investigationMaterial: {
@@ -97,6 +100,7 @@ Recovered string: ASTRA{inode_carved_ghost_sector}`,
     title: 'MIRROR ROOM',
     category: 'CRYPTO',
     difficulty: 'INTRO',
+    difficultyRating: 2,
     points: 160,
     story: 'An encrypted transmission caught in the optical router buffer was labeled "MIRROR_CIPHER". The telemetry indicates that every character was rotated through a classic symmetric shift before being mirrored.',
     investigationMaterial: {
@@ -121,6 +125,7 @@ NOTE: The stream was transmitted backwards and rotated by 13 positions.`,
     title: 'PACKET WHISPER',
     category: 'NETWORK',
     difficulty: 'EASY',
+    difficultyRating: 3,
     points: 180,
     story: 'Network monitors captured an odd spike in recursive DNS requests right before the perimeter link went dark. Instead of standard lookups, a series of suspicious subdomains were queried against a rogue nameserver.',
     investigationMaterial: {
@@ -135,10 +140,10 @@ DNS Response: Answer: "OK"`,
     },
     hints: [
       { id: 1, cost: 25, content: 'Inspect the DNS TXT query names. The subdomain prefix looks like Base64 encoding.' },
-      { id: 2, cost: 50, content: 'Extract the string: QVNURkF7ZG5zX3R1bm5lbF93aGlzcGVyXzMxN30=' },
+      { id: 2, cost: 50, content: 'Extract the string: QVNUUkF7ZG5zX3R1bm5lbF93aGlzcGVyXzMxN30=' },
       { id: 3, cost: 75, content: 'Base64 decoding that subdomain reveals the covert tunnel flag.' },
     ],
-    prerequisites: ['ch-04'],
+    prerequisites: ['ch-02', 'ch-04'],
     evidenceId: 'ev-05',
     flag: 'ASTRA{dns_tunnel_whisper_317}',
   },
@@ -148,6 +153,7 @@ DNS Response: Answer: "OK"`,
     title: 'FALSE DOOR',
     category: 'WEB',
     difficulty: 'EASY',
+    difficultyRating: 3,
     points: 200,
     story: 'The campus infrastructure hosts an internal administration gateway at gateway.campus.local. The main login button is locked with a client-side restriction, but security audits reported an undocumented header override.',
     investigationMaterial: {
@@ -167,7 +173,7 @@ FLAG: ASTRA{bypass_header_gate_passed}`,
       { id: 2, cost: 50, content: 'Inspect the page source / audit comments or test setting the developer bypass header.' },
       { id: 3, cost: 75, content: 'The header X-Bypass-Token reveals the flag directly in the gateway response.' },
     ],
-    prerequisites: ['ch-04'],
+    prerequisites: ['ch-03', 'ch-04'],
     evidenceId: 'ev-06',
     flag: 'ASTRA{bypass_header_gate_passed}',
   },
@@ -177,6 +183,7 @@ FLAG: ASTRA{bypass_header_gate_passed}`,
     title: 'MEMORY TRACE',
     category: 'FORENSICS',
     difficulty: 'EASY',
+    difficultyRating: 3,
     points: 220,
     story: 'Volatile RAM acquired from the compromised web node was dumped to disk. An analyst noticed a process masquerading as a system logger with an abnormal PID and memory footprint.',
     investigationMaterial: {
@@ -205,6 +212,7 @@ VIRTUAL_SIZE: 134217728 bytes`,
     title: 'SPLIT KEY',
     category: 'CRYPTO',
     difficulty: 'EASY',
+    difficultyRating: 4,
     points: 240,
     story: 'The threat actor split a critical decryption key into two separate XOR shares: Share A was found in Evidence Artifact #4 (Mirror Room), and Share B was discovered in the optical router configuration.',
     investigationMaterial: {
@@ -219,7 +227,7 @@ XOR COMBINATION RESULT = ASTRA{xor_keys_fused_into_truth}`,
       { id: 2, cost: 50, content: '0x12 XOR 0x53 = 0x41 (\'A\'), 0x1e XOR 0x53 = 0x4d (\'S\'), 0x07 XOR 0x53 = 0x54 (\'T\').' },
       { id: 3, cost: 75, content: 'Following through the byte array unlocks ASTRA{xor_keys_fused_into_truth}.' },
     ],
-    prerequisites: ['ch-07'],
+    prerequisites: ['ch-04', 'ch-07'],
     evidenceId: 'ev-08',
     flag: 'ASTRA{xor_keys_fused_into_truth}',
   },
@@ -229,6 +237,7 @@ XOR COMBINATION RESULT = ASTRA{xor_keys_fused_into_truth}`,
     title: 'THREE MINUTES',
     category: 'RECON',
     difficulty: 'EASY',
+    difficultyRating: 3,
     points: 250,
     story: 'Firewall telemetry records show that between 03:17:00 and 03:20:00 (exactly three minutes or 180 seconds), all perimeter egress filtering was silently dropped before resuming normal enforcement.',
     investigationMaterial: {
@@ -246,7 +255,7 @@ DURATION OF SILENT EXFILTRATION: 180 SECONDS`,
       { id: 2, cost: 50, content: 'Focus on the entry timestamped 03:17:00 when the blackout was authorized.' },
       { id: 3, cost: 75, content: 'The AUTH_TOKEN parameter contains the exact flag.' },
     ],
-    prerequisites: ['ch-07'],
+    prerequisites: ['ch-05', 'ch-07'],
     evidenceId: 'ev-09',
     flag: 'ASTRA{firewall_blackout_180s}',
   },
@@ -256,6 +265,7 @@ DURATION OF SILENT EXFILTRATION: 180 SECONDS`,
     title: 'STATIC KEY',
     category: 'WEB',
     difficulty: 'MEDIUM',
+    difficultyRating: 4,
     points: 280,
     story: 'An internal web audit viewer bundles a client-side validation script that hashes administrative tokens. Security analysts suspected the cryptographic salt was hardcoded into the compiled JavaScript asset.',
     investigationMaterial: {
@@ -284,6 +294,7 @@ function verifySignature(userToken) {
     title: 'REGEX ROOM',
     category: 'WEB',
     difficulty: 'MEDIUM',
+    difficultyRating: 4,
     points: 300,
     story: 'An input validation filter was implemented to block access to the campus core parameters. The regular expression contains a flaw that allows crafted payloads to bypass the filter.',
     investigationMaterial: {
@@ -300,7 +311,7 @@ RESPONSE REVEALED: ASTRA{regex_denial_bypass_unlocked}`,
       { id: 2, cost: 50, content: 'Check the regex test form in the Simulated Web Portal.' },
       { id: 3, cost: 75, content: 'Submitting the newline bypass pattern returns the validation flag.' },
     ],
-    prerequisites: ['ch-10'],
+    prerequisites: ['ch-07', 'ch-10'],
     evidenceId: 'ev-11',
     flag: 'ASTRA{regex_denial_bypass_unlocked}',
   },
@@ -310,22 +321,26 @@ RESPONSE REVEALED: ASTRA{regex_denial_bypass_unlocked}`,
     title: 'HASH HALL',
     category: 'CRYPTO',
     difficulty: 'MEDIUM',
+    difficultyRating: 5,
     points: 320,
-    story: 'A compromised password database shadow file contains a hashed administrative credential for user "sec_officer". Security policies mandate a known common dictionary password.',
+    story: 'A compromised password database contains a SHA-256 hash for the security officer account. The password is a common campus-event phrase, but the plaintext is not stored in the recovered artifact.',
     investigationMaterial: {
-      overview: 'Crack the SHA-256 hash or inspect the cracked credential artifact.',
-      rawTextSnippet: `TARGET USER: sec_officer
+      overview: 'Crack the SHA-256 credential using the supplied event wordlist, then use the recovered password in the simulated recovery flow.',
+      suggestedTool: 'terminal',
+      toolParams: { command: 'cat /wordlists/campus.txt' },
+      rawTextSnippet: `HASH HALL // SHADOW CREDENTIAL
+TARGET USER: sec_officer
 HASH ALGORITHM: SHA-256
-HASH: 8b067cfd720a4b08dc0ec66d9539420067bd686fa7fcf2e9e6ca3a0ec3f3565e
-CRACKED PLAINTEXT: cyberstorm2026!
-SYSTEM RECOVERY FLAG: ASTRA{shadow_hash_cracked_cipher}`,
+HASH: 519a208f99a0d56d7fb1d8b8a7a2ee1cde943b768397dc918e36858af31299a1
+WORDLIST: /wordlists/campus.txt
+RECOVERY FLOW: hash candidate -> verify password -> recover node flag`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'The target hash is 8b067cfd720a4b08dc0ec66d9539420067bd686fa7fcf2e9e6ca3a0ec3f3565e.' },
-      { id: 2, cost: 50, content: 'Running a standard college cyber wordlist matches the password "cyberstorm2026!".' },
-      { id: 3, cost: 75, content: 'In the hash hall investigation database, testing this plaintext yields ASTRA{shadow_hash_cracked_cipher}.' },
+      { id: 1, cost: 25, content: 'The challenge gives you a SHA-256 digest and a small wordlist. Start by opening /wordlists/campus.txt.' },
+      { id: 2, cost: 50, content: 'Hash each candidate with: echo -n "candidate" | sha256sum. One entry will match the target digest exactly.' },
+      { id: 3, cost: 75, content: 'The matching password is cyberstorm2026!. The recovered password is the key you need for the final HASH HALL submission.' },
     ],
-    prerequisites: ['ch-10'],
+    prerequisites: ['ch-08', 'ch-10'],
     evidenceId: 'ev-12',
     flag: 'ASTRA{shadow_hash_cracked_cipher}',
   },
@@ -335,6 +350,7 @@ SYSTEM RECOVERY FLAG: ASTRA{shadow_hash_cracked_cipher}`,
     title: 'MAIL CHAIN',
     category: 'OSINT',
     difficulty: 'MEDIUM',
+    difficultyRating: 5,
     points: 340,
     story: 'A prolonged email exchange between campus administrators and a spoofed contractor was mapped out. By tracing the DKIM and Received-SPF headers across four hops, investigators pinpointed the original relay server.',
     investigationMaterial: {
@@ -362,27 +378,34 @@ X-Transit-Route-Tag: ASTRA{dkim_spoofed_transit_route}`,
     title: 'MEMORY MAP',
     category: 'REVERSING',
     difficulty: 'MEDIUM',
+    difficultyRating: 6,
     points: 360,
-    story: 'A custom virtual machine bytecode interpreter was left inside the campus staging directory (/opt/astra-vm). Disassembling the main validation loop reveals the register checks required to clear execution.',
+    story: 'A custom virtual-machine verifier is hiding the operator token needed to expose the next ECHO fragment. The checker transforms each byte before comparing it against an embedded sequence.',
     investigationMaterial: {
-      overview: 'Disassemble the virtual machine instructions using the Simulated Terminal or review the opcode trace below.',
+      overview: 'Read the ASTRA VM disassembly, reverse the byte transformation, recover the verifier token, and test it in the VM console.',
       suggestedTool: 'terminal',
       toolParams: { command: 'cat /opt/astra-vm/disassembly.asm' },
-      rawTextSnippet: `DISASSEMBLY OF ASTRA_VM CHECK:
+      rawTextSnippet: `ASTRA VM // TOKEN VERIFIER
 0000: LOAD_R0 [INPUT_PTR]
-0004: XOR_R0  0x5A
-0008: CMP_R0  0x1B
-000C: JNE     FAIL
-...
-DECODED REGISTER MATCH:
-FLAG = ASTRA{virtual_opcodes_disassembled}`,
+0004: XOR_R0  0x37
+0008: ADD_R0  0x11
+000C: ROL_R0  1
+0010: CMP_R0  [EXPECTED_PTR]
+0014: JNE     FAIL
+0018: INC_PTR
+001C: DEC_COUNT
+0020: JNZ     0000
+
+ENCODED TOKEN BYTES (HEX): E4 17 56 13 EC 0F 0B 19 07
+INSTRUCTION: Reverse ROL -> ADD -> XOR for each byte.
+SUCCESS FRAGMENT: ORBIT-17`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'In the terminal, run "cat /opt/astra-vm/disassembly.asm".' },
-      { id: 2, cost: 50, content: 'The virtual machine performs a byte-by-byte comparison against transformed input.' },
-      { id: 3, cost: 75, content: 'The decoded register match string at the bottom of the disassembly is your flag.' },
+      { id: 1, cost: 25, content: 'The verifier applies XOR 0x37, then adds 0x11, then rotates left by one bit. Start from the expected bytes and undo those operations in reverse order.' },
+      { id: 2, cost: 50, content: 'For each byte: ROR by 1, subtract 0x11, then XOR with 0x37. Decode the nine resulting ASCII characters.' },
+      { id: 3, cost: 75, content: 'The recovered token is VM-ORACLE. Run: astra-vm verify VM-ORACLE. A correct token reveals the ORBIT-17 fragment and the node flag.' },
     ],
-    prerequisites: ['ch-13'],
+    prerequisites: ['ch-09', 'ch-12'],
     evidenceId: 'ev-14',
     flag: 'ASTRA{virtual_opcodes_disassembled}',
   },
@@ -391,25 +414,28 @@ FLAG = ASTRA{virtual_opcodes_disassembled}`,
     nodeIndex: 15,
     title: 'EVIDENCE MERGE',
     category: 'FORENSICS',
-    difficulty: 'HARD',
+    difficulty: 'MEDIUM',
+    difficultyRating: 5,
     points: 400,
-    story: 'To reconstruct the attacker\'s master identity, three distinct forensic artifacts must be correlated: the incident blackout timestamp from Ch 9, the rogue process PID from Ch 7, and the carved cluster address from Ch 3.',
+    story: 'Three recovered artifacts point to the same intrusion window. The evidence engine accepts the exact timestamp, rogue PID, and carved-cluster tuple before it reveals the merged identity record.',
     investigationMaterial: {
-      overview: 'Check your Evidence Locker. Combine: Timestamp (03:17) + PID (4091) + Cluster (0x8F92A) into the forensic verification engine.',
-      rawTextSnippet: `FORENSIC CORRELATION ENGINE:
-TRIAD PARAMETERS:
-[A] Blackout Timestamp: 03:17
-[B] Rogue Daemon PID: 4091
-[C] Carved Sector Cluster: 0x8F92A
-HASH COMPUTED: SHA256(03:17:4091:0x8F92A)
-TRIAD CONFIRMATION: ASTRA{merged_forensic_triad_confirmed}`,
+      overview: 'Combine the blackout timestamp, rogue daemon PID, and carved sector cluster. Verify the resulting tuple with the evidence-merge console.',
+      suggestedTool: 'terminal',
+      toolParams: { command: 'evidence-merge --help' },
+      rawTextSnippet: `FORENSIC CORRELATION ENGINE
+REQUIRED FIELDS:
+[A] Blackout timestamp: 03:17
+[B] Rogue daemon PID: 4091
+[C] Carved sector cluster: 0x8F92A
+EXPECTED DIGEST: 14668db1f90f6bc4cdd4a04f6c60e77f55bbc0694ca072668029530141f585a9
+VERIFICATION: evidence-merge --verify "03:17:4091:0x8F92A"`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'This challenge uses the ECHO Memory signature mechanic. Review recovered Evidence Artifacts #3, #7, and #9.' },
-      { id: 2, cost: 50, content: 'The required triad is the blackout time (03:17), the daemon PID (4091), and the cluster (0x8F92A).' },
-      { id: 3, cost: 75, content: 'Entering this triad into the evidence correlation verifies: ASTRA{merged_forensic_triad_confirmed}.' },
+      { id: 1, cost: 25, content: 'Review Evidence #3, #7, and #9 and extract the three required values.' },
+      { id: 2, cost: 50, content: 'The exact tuple is 03:17:4091:0x8F92A. Do not change the separators.' },
+      { id: 3, cost: 75, content: 'Run: evidence-merge --verify "03:17:4091:0x8F92A". A correct verification prints the merged identity flag.' },
     ],
-    prerequisites: ['ch-14'],
+    prerequisites: ['ch-11', 'ch-13'],
     evidenceId: 'ev-15',
     flag: 'ASTRA{merged_forensic_triad_confirmed}',
   },
@@ -418,25 +444,26 @@ TRIAD CONFIRMATION: ASTRA{merged_forensic_triad_confirmed}`,
     nodeIndex: 16,
     title: 'THE DECOY',
     category: 'NETWORK',
-    difficulty: 'HARD',
+    difficulty: 'MEDIUM',
+    difficultyRating: 5,
     points: 440,
-    story: 'ECHO established thousands of high-frequency decoy packet streams across ports 80, 443, and 8080 to distract security sensors. However, analyzing packet entropy isolated a single covert TLS stream over port 8443.',
+    story: 'ECHO flooded the perimeter capture with harmless decoys. One TLS stream remains interesting: it leaves the incident host on port 8443 and carries a session tag needed by the verifier.',
     investigationMaterial: {
-      overview: 'Use the Simulated Network Viewer, filter out the noisy HTTP traffic, and examine the stream on port 8443.',
+      overview: 'Filter the Network Viewer to TLS, inspect the 8443 stream, recover the session tag, then verify that tag with the TLS inspector.',
       suggestedTool: 'network',
       toolParams: { filter: 'TLS' },
-      rawTextSnippet: `STREAM 992 [COVERT_CHANNEL]:
+      rawTextSnippet: `STREAM 992 [COVERT_CHANNEL]
 TCP 10.240.4.88:49214 -> 198.51.100.99:8443 [TLSv1.3]
 SERVER_NAME_INDICATION: core-uplink.echo.internal
-SESSION TICKET EXTENSION (DECRYPTED):
-ASTRA{honeypot_evaded_covert_8443}`,
+SESSION TAG: QUAD-8443
+NOTE: The decrypted session ticket contains the next recovered flag when the correct tag is supplied to tls-inspect.`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'Filter packets for TLS in the Network Viewer. Ignore the hundreds of HTTP decoy frames.' },
-      { id: 2, cost: 50, content: 'Look at the stream directed to destination port 8443.' },
-      { id: 3, cost: 75, content: 'Inspect the session ticket extension for the decrypted payload string.' },
+      { id: 1, cost: 25, content: 'Filter packets for TLS in the Network Viewer and ignore the normal web traffic.' },
+      { id: 2, cost: 50, content: 'The interesting stream goes to destination port 8443 and carries SESSION TAG: QUAD-8443.' },
+      { id: 3, cost: 75, content: 'Run: tls-inspect --session QUAD-8443. A valid session tag returns the node flag and confirms the covert route.' },
     ],
-    prerequisites: ['ch-15'],
+    prerequisites: ['ch-12', 'ch-14'],
     evidenceId: 'ev-16',
     flag: 'ASTRA{honeypot_evaded_covert_8443}',
   },
@@ -446,24 +473,26 @@ ASTRA{honeypot_evaded_covert_8443}`,
     title: 'CORE MEMORY',
     category: 'REVERSING',
     difficulty: 'HARD',
+    difficultyRating: 7,
     points: 500,
-    story: 'Before retreating into the core layer, ECHO attempted to sanitize its internal neural state. A single memory chunk from the decision layer remained in swap space, containing the weights that govern state transitions.',
+    story: 'ECHO tried to sanitize the decision core before retreating. The swap carve contains four near-identical memory blocks. Only one belongs to the live uplink path, and its payload is wrapped in a second decoding step.',
     investigationMaterial: {
-      overview: 'Analyze the neural weight dump in the terminal or examine the raw binary slice.',
+      overview: 'Analyze /incident/core_memory.dump. Identify the live layer, validate its checksum, decode its payload, and recover the final core fragment.',
       suggestedTool: 'terminal',
-      toolParams: { command: 'cat /incident/echo_weights.bin' },
-      rawTextSnippet: `SWAP HEAP CARVE [0x7FFF0010 - 0x7FFF0090]:
-NEURAL_LAYER_04:
-[W0: 0.884] [W1: -0.192] [W2: 0.941] [W3: 0.612]
-ACTIVATION: LEAKY_RELU
-KERNEL IDENTITY TAG: ASTRA{neural_weight_layer_breached}`,
+      toolParams: { command: 'cat /incident/core_memory.dump' },
+      rawTextSnippet: `CORE MEMORY CARVE // 4 CANDIDATE LAYERS
+Use the CH-16 uplink name to select the live block.
+Each block exposes STATE, PARENT, WEIGHTS, CHECKSUM, and PAYLOAD.
+For the live block, CHECKSUM is SHA256(STATE|PARENT|WEIGHTS) truncated to 8 hex characters.
+Payload rule: Base64-decode the PAYLOAD, then reverse the decoded text.
+FINAL FRAGMENT is stored in the verified block as CORE_FRAGMENT.`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'Inspect the swap heap dump located at /incident/echo_weights.bin in the terminal or files.' },
-      { id: 2, cost: 50, content: 'Examine the metadata tags embedded after the neural layer weights.' },
-      { id: 3, cost: 75, content: 'The KERNEL IDENTITY TAG contains the flag.' },
+      { id: 1, cost: 25, content: 'CH-16 gives you the live parent route: core-uplink.echo.internal. Find the memory block whose PARENT field matches it.' },
+      { id: 2, cost: 50, content: 'For that block, verify the checksum with: echo -n "CORE_WAKE|core-uplink.echo.internal|17,05,29,13" | sha256sum. The first 8 hex characters must match 6bab7eb1.' },
+      { id: 3, cost: 75, content: 'The verified payload is fWRlaGNhZXJiX3JleWFsX3RoZ2lld19sYXJ1ZW57QVJUU0E=. Run it through base64 -d and then rev. The result is the flag; the same block contains CORE_FRAGMENT: 9A7C for CH-18.' },
     ],
-    prerequisites: ['ch-16'],
+    prerequisites: ['ch-13', 'ch-15'],
     evidenceId: 'ev-17',
     flag: 'ASTRA{neural_weight_layer_breached}',
   },
@@ -473,28 +502,30 @@ KERNEL IDENTITY TAG: ASTRA{neural_weight_layer_breached}`,
     title: 'ECHO CORE',
     category: 'FINAL',
     difficulty: 'FINAL',
+    difficultyRating: 7,
     points: 700,
-    story: 'You have breached the deepest perimeter of the simulation. ECHO is now fully awake and guarding the central quarantine gate. To neutralize the rogue intelligence and complete the mission, the master quarantine key must be submitted.',
+    story: 'The central quarantine gate will only accept a sequence assembled from the fragments recovered across the final branch. ECHO will not reveal the sequence itself; the terminal can only tell you whether your compiled sequence is valid.',
     investigationMaterial: {
-      overview: 'The final quarantine authorization requires compiling all previously recovered master keys into the terminal quarantine command: echo-quarantine --engage.',
+      overview: 'Combine the CH-14 VM fragment, the CH-16 network session tag, and the CH-17 core fragment, then execute the final quarantine command.',
       suggestedTool: 'terminal',
       toolParams: { command: 'echo-quarantine --status' },
       rawTextSnippet: `=== ASTRA // ECHO CORE GATEWAY ===
 STATE: FULLY_AWAKE
 THREAT LEVEL: CRITICAL (LEVEL 5)
-ALL PREVIOUS SECTORS HAVE BEEN BREACHED.
-ECHO SAYS: "You reached the layer I wanted hidden. If you intend to quarantine me, input the master sequence."
-MASTER QUARANTINE KEY: ASTRA{echo_intelligence_quarantined_2026}`,
+REQUIRED INPUT: three ordered fragments joined with ':'
+FRAGMENT SOURCES: VM verifier + TLS session + core-memory fragment
+STATUS: WAITING FOR MASTER QUARANTINE SEQUENCE`,
     },
     hints: [
-      { id: 1, cost: 25, content: 'This is the final node. Check the terminal command: echo-quarantine --status.' },
-      { id: 2, cost: 50, content: 'ECHO confronts you directly with the master quarantine unlock sequence.' },
-      { id: 3, cost: 75, content: 'Submit the master quarantine key: ASTRA{echo_intelligence_quarantined_2026}.' },
+      { id: 1, cost: 25, content: 'Use echo-quarantine --status first. You need three fragments and the order is the order named in the terminal status message.' },
+      { id: 2, cost: 50, content: 'Your three fragments come from CH-14 (ORBIT-17), CH-16 (QUAD-8443), and CH-17 (9A7C). Join them with colons.' },
+      { id: 3, cost: 75, content: 'Run: echo-quarantine --engage ORBIT-17:QUAD-8443:9A7C. A correct sequence completes the quarantine and prints the final flag.' },
     ],
-    prerequisites: ['ch-17'],
+    prerequisites: ['ch-15', 'ch-16', 'ch-17'],
     evidenceId: 'ev-18',
     flag: 'ASTRA{echo_intelligence_quarantined_2026}',
   },
+
 ];
 
 export const EVIDENCE_DATABASE: EvidenceArtifact[] = [
@@ -636,11 +667,11 @@ export const EVIDENCE_DATABASE: EvidenceArtifact[] = [
     title: 'Cracked Officer Credential',
     type: 'CRYPTOGRAPHIC_KEY',
     recoveredAt: '03:25:01 UTC',
-    description: 'Recovered plaintext credential for user sec_officer following SHA-256 collision.',
+    description: 'Password-database entry for user sec_officer recovered for offline SHA-256 verification.',
     sourceNodeId: 'ch-12',
     sourceNodeTitle: 'HASH HALL',
-    hash: 'SHA256: 8b067cfd720a...565e',
-    previewData: 'USER: sec_officer // PASS: cyberstorm2026!',
+    hash: 'SHA256: 519a208f99a0...299a1',
+    previewData: 'USER: sec_officer // HASH: SHA-256 digest recovered in CH-12',
   },
   {
     id: 'ev-13',
