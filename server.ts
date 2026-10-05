@@ -3,7 +3,6 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
-import { createServer as createViteServer } from 'vite';
 import { store } from './server/supabase-store.js';
 import { SIMULATED_EMAILS, SIMULATED_FILES, SIMULATED_PACKETS } from './server/simulated-data.js';
 import { SERVER_CHALLENGES } from './server/challenges-data.js';
@@ -474,6 +473,7 @@ async function startServer() {
   // --- Vite & Static Handling ---
   if (process.env.VERCEL) return app;
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
