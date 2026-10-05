@@ -243,11 +243,6 @@ function verifySignature(userToken) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-[#1b2129] bg-[#0d1015] px-4 py-1.5 font-mono text-[10px] text-[#6b7280] flex justify-between">
-          <span>FICTIONAL INTERNAL WEB PORTAL SIMULATION</span>
-          <span>SANDBOXED EXECUTION</span>
-        </div>
       </div>
     </div>
   );

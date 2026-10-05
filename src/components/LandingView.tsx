@@ -1,26 +1,15 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { EchoCoreVisual } from './EchoCoreVisual';
-import { Shield, ArrowRight, Terminal, User, Sparkles, Cpu, Lock, Eye, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Terminal, User, Sparkles, Cpu, Lock, Eye, AlertTriangle } from 'lucide-react';
 
 export const LandingView: React.FC = () => {
   const { 
     team, 
     setActiveView, 
     openAuthModal, 
-    setIsFieldBriefingOpen,
-    login 
+    setIsFieldBriefingOpen
   } = useApp();
-
-  const handleQuickDemoLogin = async (teamName: string) => {
-    try {
-      await login(teamName, 'kmct2026');
-      setActiveView('warroom');
-    } catch {
-      // fallback
-      setActiveView('warroom');
-    }
-  };
 
   return (
     <div className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:py-16">
@@ -92,34 +81,6 @@ export const LandingView: React.FC = () => {
             </button>
           </div>
 
-          {/* Safety Disclaimer */}
-          <div className="mt-8 flex items-center space-x-2 border-l-2 border-[#ccff00]/40 pl-3 font-mono text-[11px] uppercase tracking-wider text-[#6b7280]">
-            <Shield className="h-3.5 w-3.5 text-[#ccff00]" />
-            <span>FICTIONAL ENVIRONMENT · SAFE TRAINING SIMULATION · NO REAL TARGETS</span>
-          </div>
-
-          {/* Fast Demo Accounts Bar (Convenience for testing) */}
-          <div className="mt-8 border border-[#1b2129] bg-[#0c0f13]/80 p-3">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-[#9ca3af]">
-              Quick Access Demo Unit (Evaluator Preset):
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                id="demo-login-alpha-btn"
-                onClick={() => handleQuickDemoLogin('KMCT_ALPHA')}
-                className="border border-[#1b2129] bg-[#141920] px-2.5 py-1 font-mono text-xs text-[#ccff00] transition-colors hover:border-[#ccff00]"
-              >
-                KMCT_ALPHA (6 solved · 1,150 pts)
-              </button>
-              <button
-                id="demo-register-new-btn"
-                onClick={() => openAuthModal('register')}
-                className="border border-[#1b2129] bg-[#141920] px-2.5 py-1 font-mono text-xs text-[#00f0ff] transition-colors hover:border-[#00f0ff]"
-              >
-                + Register New Team (Clean State)
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Right Column: Interactive ECHO CORE */}

@@ -34,6 +34,8 @@ function isAdminAuthorized(req: Request): boolean {
 // Extend Express Request
 interface AuthenticatedRequest extends Request {
   team?: any;
+  sessionToken?: string;
+  sessionLookupFailed?: boolean;
 }
 
 async function startServer() {
@@ -58,11 +60,13 @@ async function startServer() {
     const token = bearerToken || customHeaderToken || req.cookies?.astrasess;
     try {
       if (token) {
+        req.sessionToken = token;
         const team = await store.getTeamByToken(token);
         if (team) req.team = team;
       }
     } catch {
       // Treat datastore/auth lookup failures as unauthenticated for this request.
+      req.sessionLookupFailed = true;
     }
     next();
   });
@@ -152,6 +156,25 @@ async function startServer() {
 
   app.get('/api/auth/me', (req: AuthenticatedRequest, res) => {
     res.json({ team: req.team || null });
+  });
+
+  app.post('/api/auth/heartbeat', async (req: AuthenticatedRequest, res) => {
+    if (req.sessionLookupFailed) {
+      return res.status(503).json({ error: 'Unable to verify team session.' });
+    }
+    if (!req.team || !req.sessionToken) {
+      return res.status(401).json({ error: 'Team session expired. Please sign in again.' });
+    }
+    try {
+      const renewed = await store.renewSession(req.sessionToken);
+      if (!renewed) {
+        return res.status(401).json({ error: 'Team session expired. Please sign in again.' });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[ASTRA AUTH] failed to renew team session', err);
+      res.status(503).json({ error: 'Unable to renew team session.' });
+    }
   });
 
   // Team-scoped live snapshot. Clients poll this endpoint so both players share

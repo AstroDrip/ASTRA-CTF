@@ -24,7 +24,24 @@ interface Session {
   token: string;
   teamId: string;
   createdAt: number;
+  expiresAt?: number;
 }
+
+export const SESSION_LEASE_MS = 30 * 1000;
+
+const LEGACY_DEMO_TEAM_IDS = new Set([
+  'team-kmct-alpha',
+  'team-void-seekers',
+  'team-zero-day',
+  'team-phantom',
+]);
+const LEGACY_DEMO_TEAM_NAMES = new Set([
+  'KMCT_ALPHA',
+  'VOID_SEEKERS',
+  'ZERO_DAY_SYNDICATE',
+  'NEURAL_PHANTOM',
+  'NULL_SECTOR',
+]);
 
 export class CTFStore {
   private teams: Map<string, Team> = new Map();
@@ -39,8 +56,7 @@ export class CTFStore {
 
   constructor() {
     const loaded = this.loadFromDisk();
-    if (!loaded || this.teams.size === 0) {
-      this.seedDefaultTeams();
+    if (!loaded) {
       this.saveToDisk();
     }
   }
@@ -70,88 +86,38 @@ export class CTFStore {
         const raw = fs.readFileSync(this.dataFilePath, 'utf8');
         const data = JSON.parse(raw);
         if (data && Array.isArray(data.teams)) {
-          this.teams = new Map(data.teams);
-          this.passwordHashes = new Map(data.passwordHashes || []);
-          this.sessions = new Map(data.sessions || []);
-          this.submissions = data.submissions || [];
+          const teams = data.teams.filter(([teamId, team]: [string, Team]) =>
+            !LEGACY_DEMO_TEAM_IDS.has(teamId) &&
+            !LEGACY_DEMO_TEAM_NAMES.has(team.name.trim().toUpperCase())
+          );
+          const retainedTeamIds = new Set(teams.map(([teamId]: [string, Team]) => teamId));
+          this.teams = new Map(teams);
+          this.passwordHashes = new Map(
+            (data.passwordHashes || []).filter(([teamId]: [string, string]) => retainedTeamIds.has(teamId))
+          );
+          this.sessions = new Map(
+            (data.sessions || []).filter(([, session]: [string, Session]) => retainedTeamIds.has(session.teamId))
+          );
+          this.submissions = (data.submissions || []).filter((submission: SubmissionRecord) =>
+            !LEGACY_DEMO_TEAM_IDS.has(submission.teamId) &&
+            !LEGACY_DEMO_TEAM_NAMES.has(submission.teamName.toUpperCase())
+          );
           this.disabledChallengeIds = new Set(data.disabledChallengeIds || []);
-          this.systemEvents = Array.isArray(data.systemEvents) ? data.systemEvents : [];
+          this.systemEvents = Array.isArray(data.systemEvents)
+            ? data.systemEvents.filter((event: SystemEvent) =>
+                !event.teamId || !LEGACY_DEMO_TEAM_IDS.has(event.teamId)
+              )
+            : [];
+          if (teams.length !== data.teams.length) {
+            this.saveToDisk();
+          }
           return true;
         }
       }
     } catch (err) {
-      console.error('Failed to load CTFStore from disk, falling back to seed:', err);
+      console.error('Failed to load CTFStore from disk, falling back to an empty store:', err);
     }
     return false;
-  }
-
-  private seedDefaultTeams() {
-    const salt = bcrypt.genSaltSync(10);
-    const demoPasswordHash = bcrypt.hashSync('kmct2026', salt);
-
-    // Initial default competitor teams for lively realistic college scoreboard
-    const initialCompetitors = [
-      {
-        id: 'team-kmct-alpha',
-        name: 'KMCT_ALPHA',
-        score: 1150,
-        solvedChallengeIds: ['ch-01', 'ch-02', 'ch-03', 'ch-04', 'ch-05', 'ch-06'],
-        evidenceIds: ['ev-01', 'ev-02', 'ev-03', 'ev-04', 'ev-05', 'ev-06'],
-        unlockedHintKeys: ['ch-04_hint_1'],
-        wrongAttemptsCount: 2,
-        echoState: 'ADAPTING' as EchoStateType,
-        threatLevel: 2,
-        achievements: ['ach-01', 'ach-02'],
-        lastSolveAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-      },
-      {
-        id: 'team-void-seekers',
-        name: 'VOID_SEEKERS',
-        score: 870,
-        solvedChallengeIds: ['ch-01', 'ch-02', 'ch-03', 'ch-04', 'ch-05'],
-        evidenceIds: ['ev-01', 'ev-02', 'ev-03', 'ev-04', 'ev-05'],
-        unlockedHintKeys: ['ch-03_hint_1'],
-        wrongAttemptsCount: 1,
-        echoState: 'ADAPTING' as EchoStateType,
-        threatLevel: 2,
-        achievements: ['ach-01', 'ach-02'],
-        lastSolveAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-      },
-      {
-        id: 'team-zero-day',
-        name: 'ZERO_DAY_SYNDICATE',
-        score: 530,
-        solvedChallengeIds: ['ch-01', 'ch-02', 'ch-03'],
-        evidenceIds: ['ev-01', 'ev-02', 'ev-03'],
-        unlockedHintKeys: [],
-        wrongAttemptsCount: 0,
-        echoState: 'OBSERVING' as EchoStateType,
-        threatLevel: 1,
-        achievements: ['ach-01', 'ach-02', 'ach-03'],
-        lastSolveAt: new Date(Date.now() - 1000 * 60 * 48).toISOString(),
-      },
-      {
-        id: 'team-phantom',
-        name: 'NEURAL_PHANTOM',
-        score: 370,
-        solvedChallengeIds: ['ch-01', 'ch-02'],
-        evidenceIds: ['ev-01', 'ev-02'],
-        unlockedHintKeys: [],
-        wrongAttemptsCount: 1,
-        echoState: 'OBSERVING' as EchoStateType,
-        threatLevel: 1,
-        achievements: ['ach-01'],
-        lastSolveAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-      }
-    ];
-
-    for (const comp of initialCompetitors) {
-      this.teams.set(comp.id, {
-        ...comp,
-        createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      });
-      this.passwordHashes.set(comp.id, demoPasswordHash);
-    }
   }
 
   // --- Auth & Sessions ---
@@ -236,6 +202,7 @@ export class CTFStore {
       token,
       teamId,
       createdAt: Date.now(),
+      expiresAt: Date.now() + SESSION_LEASE_MS,
     });
     this.saveToDisk();
     return token;
@@ -244,7 +211,27 @@ export class CTFStore {
   public getTeamByToken(token: string): Team | null {
     const sess = this.sessions.get(token);
     if (!sess) return null;
+    const expiresAt = sess.expiresAt ?? sess.createdAt + SESSION_LEASE_MS;
+    if (expiresAt <= Date.now()) {
+      this.sessions.delete(token);
+      this.saveToDisk();
+      return null;
+    }
     return this.teams.get(sess.teamId) || null;
+  }
+
+  public renewSession(token: string): boolean {
+    const sess = this.sessions.get(token);
+    if (!sess) return false;
+    const expiresAt = sess.expiresAt ?? sess.createdAt + SESSION_LEASE_MS;
+    if (expiresAt <= Date.now()) {
+      this.sessions.delete(token);
+      this.saveToDisk();
+      return false;
+    }
+    sess.expiresAt = Date.now() + SESSION_LEASE_MS;
+    this.saveToDisk();
+    return true;
   }
 
   public destroySession(token: string): void {
@@ -254,9 +241,8 @@ export class CTFStore {
 
   public getActiveSessions(): Array<{ id: string; teamId: string; createdAt: string }> {
     const now = Date.now();
-    const ttl = 7 * 24 * 60 * 60 * 1000;
     return Array.from(this.sessions.values())
-      .filter((session) => now - session.createdAt < ttl)
+      .filter((session) => (session.expiresAt ?? session.createdAt + SESSION_LEASE_MS) > now)
       .map((session) => ({
         id: crypto.createHash('sha256').update(session.token).digest('hex').slice(0, 12),
         teamId: session.teamId,
@@ -552,16 +538,17 @@ export class CTFStore {
 
   public getActiveSessionCount(teamId: string): number {
     const now = Date.now();
-    const ttl = 7 * 24 * 60 * 60 * 1000;
-    return Array.from(this.sessions.values()).filter((session) => session.teamId === teamId && now - session.createdAt < ttl).length;
+    return Array.from(this.sessions.values()).filter((session) =>
+      session.teamId === teamId &&
+      (session.expiresAt ?? session.createdAt + SESSION_LEASE_MS) > now,
+    ).length;
   }
 
   public getActiveSessionCounts(): Record<string, number> {
     const result: Record<string, number> = {};
     const now = Date.now();
-    const ttl = 7 * 24 * 60 * 60 * 1000;
     for (const session of this.sessions.values()) {
-      if (now - session.createdAt >= ttl) continue;
+      if ((session.expiresAt ?? session.createdAt + SESSION_LEASE_MS) <= now) continue;
       result[session.teamId] = (result[session.teamId] || 0) + 1;
     }
     return result;
@@ -609,9 +596,9 @@ export class CTFStore {
   public adminResetCompetition(): void {
     this.submissions = [];
     this.sessions.clear();
+    this.passwordHashes.clear();
     this.teams.clear();
     this.disabledChallengeIds.clear();
-    this.seedDefaultTeams();
     this.saveToDisk();
   }
 

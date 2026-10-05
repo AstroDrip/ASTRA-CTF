@@ -72,11 +72,6 @@ const ApplicationFrame: React.FC = () => {
               <span className="text-[#374151]">·</span>
               <span>KMCT CYBER DEFENSE LABS</span>
             </div>
-            <div className="flex items-center space-x-4">
-              <span>FICTIONAL SIMULATION</span>
-              <span className="text-[#374151]">·</span>
-              <span>100% AIR-GAPPED TRAINING SANDBOX</span>
-            </div>
           </div>
         </footer>
       )}

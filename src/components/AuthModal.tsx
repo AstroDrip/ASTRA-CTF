@@ -60,21 +60,6 @@ export const AuthModal: React.FC = () => {
     }
   };
 
-  const handleQuickDemo = async (name: string) => {
-    setTeamName(name);
-    setPassword('kmct2026');
-    setLoading(true);
-    setError(null);
-    try {
-      await login(name, 'kmct2026');
-      closeAuthModal();
-    } catch (err: any) {
-      setError(err.message || 'Demo login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div 
       onClick={(e) => {
@@ -173,7 +158,7 @@ export const AuthModal: React.FC = () => {
                 type="text"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                placeholder={isLogin ? "e.g. KMCT_ALPHA or your registered unit" : "e.g. SQUAD_OMEGA_01"}
+                placeholder={isLogin ? "Your registered team callsign" : "e.g. SQUAD_OMEGA_01"}
                 className="w-full border border-[#1b2129] bg-[#050709] py-2 pl-9 pr-3 font-mono text-xs text-white placeholder-gray-600 focus:border-[#ccff00] focus:outline-none"
                 autoFocus
               />
@@ -218,61 +203,6 @@ export const AuthModal: React.FC = () => {
             {loading ? 'PROCESSING AUTHENTICATION...' : isLogin ? 'AUTHENTICATE & ENTER RANGE' : 'ENROLL UNIT & BEGIN'}
           </button>
 
-          {/* Quick Demo Login Preset for Evaluators */}
-          <div className="mt-4 border-t border-[#1b2129] pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-mono text-[10px] text-[#6b7280] uppercase tracking-widest">
-                Evaluator 1-Click Fast Sign-in:
-              </span>
-              <span className="font-mono text-[10px] text-[#4b5563]">
-                Pass: <code className="text-[#9ca3af]">kmct2026</code>
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="auth-demo-kmct-alpha"
-                onClick={() => handleQuickDemo('KMCT_ALPHA')}
-                className="border border-[#1b2129] bg-[#12161d] p-2 text-left font-mono text-[11px] text-[#ccff00] hover:border-[#ccff00] transition-colors"
-              >
-                <div className="font-bold flex items-center justify-between">
-                  <span>KMCT_ALPHA</span>
-                  <span className="text-[9px] text-[#22c55e]">Leader</span>
-                </div>
-                <div className="text-[9px] text-[#6b7280]">6 Solved · 1,150 pts</div>
-              </button>
-
-              <button
-                type="button"
-                id="auth-demo-null-sector"
-                onClick={() => handleQuickDemo('NULL_SECTOR')}
-                className="border border-[#1b2129] bg-[#12161d] p-2 text-left font-mono text-[11px] text-[#00f0ff] hover:border-[#00f0ff] transition-colors"
-              >
-                <div className="font-bold">NULL_SECTOR</div>
-                <div className="text-[9px] text-[#6b7280]">4 Solved · 750 pts</div>
-              </button>
-
-              <button
-                type="button"
-                id="auth-demo-zero-day"
-                onClick={() => handleQuickDemo('ZERO_DAY_SYNDICATE')}
-                className="border border-[#1b2129] bg-[#12161d] p-2 text-left font-mono text-[11px] text-[#f59e0b] hover:border-[#f59e0b] transition-colors"
-              >
-                <div className="font-bold">ZERO_DAY_SYNDICATE</div>
-                <div className="text-[9px] text-[#6b7280]">3 Solved · 520 pts</div>
-              </button>
-
-              <button
-                type="button"
-                id="auth-demo-neural-phantom"
-                onClick={() => handleQuickDemo('NEURAL_PHANTOM')}
-                className="border border-[#1b2129] bg-[#12161d] p-2 text-left font-mono text-[11px] text-[#ec4899] hover:border-[#ec4899] transition-colors"
-              >
-                <div className="font-bold">NEURAL_PHANTOM</div>
-                <div className="text-[9px] text-[#6b7280]">1 Solved · 100 pts</div>
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </div>

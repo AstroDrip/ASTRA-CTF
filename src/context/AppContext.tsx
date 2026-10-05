@@ -300,6 +300,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [team?.id, apiFetch]);
 
+  useEffect(() => {
+    if (!team) return;
+    let disposed = false;
+    let renewing = false;
+    const renewSession = async () => {
+      if (renewing) return;
+      renewing = true;
+      try {
+        const response = await apiFetch('/api/auth/heartbeat', { method: 'POST' });
+        if (disposed) return;
+        if (response.status === 401) {
+          setStoredToken(null);
+          setTeam(null);
+          setActiveView('landing');
+          setLiveSyncAt(null);
+          sound.playDenied();
+          triggerToast({
+            type: 'error',
+            title: 'TEAM SESSION EXPIRED',
+            message: 'Sign in again to continue.',
+          });
+        } else if (!response.ok) {
+          console.error(`[ASTRA AUTH] session heartbeat failed (${response.status})`);
+        }
+      } catch (error) {
+        if (!disposed) console.error('[ASTRA AUTH] session heartbeat failed', error);
+      } finally {
+        renewing = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') renewSession();
+    };
+    renewSession();
+    const interval = window.setInterval(renewSession, 10_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [team?.id, apiFetch, triggerToast]);
+
   const toggleMotion = () => {
     setMotionEnabled((prev) => !prev);
     sound.playClick();

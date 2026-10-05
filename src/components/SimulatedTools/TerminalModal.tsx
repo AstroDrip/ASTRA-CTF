@@ -289,7 +289,6 @@ Session initialized. Safe sandbox active. Type 'help' for available commands.`,
 
         {/* Footer */}
         <div className="border-t border-[#1b2129] bg-[#0d1015] px-4 py-1.5 font-mono text-[10px] text-[#6b7280] flex justify-between select-none">
-          <span>SANDBOXED OS SIMULATION · TEXT SELECTION & COPY ENABLED</span>
           <span>PRESS ENTER TO EXECUTE</span>
         </div>
       </div>

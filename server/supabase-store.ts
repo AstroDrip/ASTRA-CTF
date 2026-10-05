@@ -18,9 +18,7 @@ import {
   INITIAL_ACHIEVEMENTS,
   ServerChallengeDefinition,
 } from './challenges-data.js';
-import { CTFStore } from './store.js';
-
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { CTFStore, SESSION_LEASE_MS } from './store.js';
 
 interface SupabaseRow {
   [key: string]: any;
@@ -33,6 +31,11 @@ function safeError(error: any): Error {
 
 function tokenHash(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function activeLeaseFilter(now: Date): string {
+  const upperBound = new Date(now.getTime() + SESSION_LEASE_MS);
+  return `&and=${encodeURIComponent(`(expires_at.gt.${now.toISOString()},expires_at.lte.${upperBound.toISOString()})`)}`;
 }
 
 export class SupabaseCTFStore {
@@ -252,7 +255,7 @@ export class SupabaseCTFStore {
 
     const token = `astrasess_${crypto.randomBytes(32).toString('hex')}`;
     const now = new Date();
-    const expires = new Date(now.getTime() + SESSION_TTL_MS);
+    const expires = new Date(now.getTime() + SESSION_LEASE_MS);
     await this.request('sessions', {
       method: 'POST',
       body: JSON.stringify({
@@ -271,14 +274,32 @@ export class SupabaseCTFStore {
       return this.localStore.getTeamByToken(token);
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const sessions = await this.request(
       'sessions',
       {},
-      `?token_hash=eq.${encodeURIComponent(tokenHash(token))}&revoked_at=is.null&expires_at=gt.${encodeURIComponent(now)}&select=team_id&limit=1`,
+      `?token_hash=eq.${encodeURIComponent(tokenHash(token))}&revoked_at=is.null${activeLeaseFilter(now)}&select=team_id&limit=1`,
     );
     const teamId = sessions?.[0]?.team_id;
     return teamId ? this.getTeam(teamId) : null;
+  }
+
+  public async renewSession(token: string): Promise<boolean> {
+    if (!token) return false;
+    if (!this.isConfigured) return this.localStore.renewSession(token);
+    const now = new Date();
+    const rows = await this.request(
+      'sessions',
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          expires_at: new Date(now.getTime() + SESSION_LEASE_MS).toISOString(),
+        }),
+      },
+      `?token_hash=eq.${encodeURIComponent(tokenHash(token))}&revoked_at=is.null${activeLeaseFilter(now)}&select=token_hash`,
+    );
+    return Array.isArray(rows) && rows.length === 1;
   }
 
   public async destroySession(token: string): Promise<void> {
@@ -571,22 +592,22 @@ export class SupabaseCTFStore {
 
   public async getActiveSessionCount(teamId: string): Promise<number> {
     if (!this.isConfigured) return this.localStore.getActiveSessionCount(teamId);
-    const now = encodeURIComponent(new Date().toISOString());
+    const nowDate = new Date();
     const rows = await this.request(
       'sessions',
       {},
-      `?team_id=eq.${encodeURIComponent(teamId)}&revoked_at=is.null&expires_at=gt.${now}&select=token_hash`,
+      `?team_id=eq.${encodeURIComponent(teamId)}&revoked_at=is.null${activeLeaseFilter(nowDate)}&select=token_hash`,
     );
     return Array.isArray(rows) ? rows.length : 0;
   }
 
   public async getActiveSessionCounts(): Promise<Record<string, number>> {
     if (!this.isConfigured) return this.localStore.getActiveSessionCounts();
-    const now = encodeURIComponent(new Date().toISOString());
+    const nowDate = new Date();
     const rows = await this.request(
       'sessions',
       {},
-      `?revoked_at=is.null&expires_at=gt.${now}&select=team_id`,
+      `?revoked_at=is.null${activeLeaseFilter(nowDate)}&select=team_id`,
     );
     const result: Record<string, number> = {};
     for (const row of rows || []) {
@@ -597,11 +618,11 @@ export class SupabaseCTFStore {
 
   public async getActiveSessions(): Promise<Array<{ id: string; teamId: string; createdAt: string }>> {
     if (!this.isConfigured) return this.localStore.getActiveSessions();
-    const now = encodeURIComponent(new Date().toISOString());
+    const nowDate = new Date();
     const rows = await this.request(
       'sessions',
       {},
-      `?revoked_at=is.null&expires_at=gt.${now}&select=token_hash,team_id,created_at`,
+      `?revoked_at=is.null${activeLeaseFilter(nowDate)}&select=token_hash,team_id,created_at`,
     );
     return (rows || []).map((row: SupabaseRow) => ({
       id: String(row.token_hash).slice(0, 12),
@@ -615,11 +636,11 @@ export class SupabaseCTFStore {
       this.localStore.adminRevokeSession(teamId, sessionId);
       return;
     }
-    const now = encodeURIComponent(new Date().toISOString());
+    const nowDate = new Date();
     const rows = await this.request(
       'sessions',
       {},
-      `?team_id=eq.${encodeURIComponent(teamId)}&revoked_at=is.null&expires_at=gt.${now}&select=token_hash`,
+      `?team_id=eq.${encodeURIComponent(teamId)}&revoked_at=is.null${activeLeaseFilter(nowDate)}&select=token_hash`,
     );
     const matches = (rows || []).filter((row: SupabaseRow) => String(row.token_hash).startsWith(sessionId));
     if (matches.length !== 1) throw new Error(matches.length ? 'Session identifier is ambiguous.' : 'Active session not found.');
